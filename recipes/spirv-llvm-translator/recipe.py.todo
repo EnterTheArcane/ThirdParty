@@ -1,0 +1,74 @@
+import os
+
+from thirdparty import RecipeBase
+from thirdparty.cmake import CMake, CMakeConfigDeps, CMakeToolchain
+from thirdparty.files import copy, get
+from thirdparty.scm import Version
+from thirdparty.scm.github import GithubRepository
+
+
+class Recipe(RecipeBase):
+    name = "spirv-llvm-translator"
+    version = "22.1.2"
+    license = "NCSA"
+
+    options = {
+        "shared": [True, False],
+        "fPIC": [True, False],
+    }
+    default_options = {
+        "shared": False,
+        "fPIC": True,
+    }
+
+    def config_options(self):
+        if self.settings.os == "Windows":
+            del self.options.fPIC
+
+    def configure(self):
+        if self.options.shared:
+            del self.options.fPIC
+
+    def requirements(self):
+        self.requires_tool("cmake")
+        self.requires("llvm")
+        self.requires("spirv-headers")
+
+    def latest_version(self):
+        repo = GithubRepository(self, "KhronosGroup/SPIRV-LLVM-Translator")
+        return Version(repo.latest_release.lstrip("v"))
+
+    def source(self):
+        get(
+            self,
+            url="https://github.com/KhronosGroup/SPIRV-LLVM-Translator/archive/refs/tags/v22.1.2.tar.gz",
+            sha256="b37196b1a1a60282a24cf937ab7d6807d7d54dc718f2a37a78e211be26df57ac",
+            destination=self.source_folder,
+            strip_root=True)
+
+    def generate(self):
+        tc = CMakeToolchain(self)
+        llvm_pkg = self.dependencies["llvm"].package_folder
+        tc.variables["LLVM_DIR"] = os.path.join(llvm_pkg, "lib", "cmake", "llvm").replace("\\", "/")
+        tc.variables["LLVM_SPIRV_BUILD_EXTERNAL"] = True
+        tc.variables["LLVM_SPIRV_INCLUDE_TESTS"] = False
+        spirv_headers_pkg = self.dependencies["spirv-headers"].package_folder
+        tc.variables["LLVM_EXTERNAL_SPIRV_HEADERS_SOURCE_DIR"] = spirv_headers_pkg.replace("\\", "/")
+        tc.generate()
+        deps = CMakeConfigDeps(self)
+        deps.generate()
+
+    def build(self):
+        cmake = CMake(self)
+        cmake.configure()
+        cmake.build()
+
+    def package(self):
+        copy(self, "LICENSE*", src=self.source_folder, dst=os.path.join(self.package_folder, "licenses"))
+        cmake = CMake(self)
+        cmake.install()
+
+    def package_info(self):
+        self.cpp_info.includedirs = []
+        self.cpp_info.libdirs = []
+        self.cpp_info.bindirs = ["bin"]

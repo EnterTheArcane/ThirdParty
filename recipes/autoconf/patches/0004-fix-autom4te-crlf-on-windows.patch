@@ -1,0 +1,9 @@
+--- a/bin/autom4te.in
++++ b/bin/autom4te.in
+@@ -1023,5 +1023,6 @@ sub freeze ($)
+   $result =~ s/#.*\n//g;
++  $result =~ s/\r//g;
+   $result =~ s/^\n//mg;
+ 
+   fatal "freezing produced output:\n$result"
+     if $result;

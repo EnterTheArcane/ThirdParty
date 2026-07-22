@@ -1,0 +1,49 @@
+name: ThirdParty Windows
+
+on:
+  workflow_call:
+    inputs:
+      arch:
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      arch:
+        description: Architecture
+        required: false
+        type: choice
+        options:
+          - ARM
+          - X64
+        default: X64
+
+run-name: Windows ${{ inputs.arch }}
+
+jobs:
+  build:
+    name: Build
+    runs-on: windows-2025-vs2026
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Setup MSVC
+        uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756
+
+      - name: Pip Install
+        run: python -m pip install -e "."
+
+      - name: Build
+        timeout-minutes: 330
+        run: >-
+          thirdparty build
+          --target-arch ${{ inputs.arch }}

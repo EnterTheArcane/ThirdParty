@@ -1,0 +1,13 @@
+diff --git CMakeLists.txt CMakeLists.txt
+index 9fb78be..a1b2c3d 100644
+--- CMakeLists.txt
++++ CMakeLists.txt
+@@ -315,6 +315,7 @@
+   if(TARGET ${target})
+     get_target_property(target_type ${target} TYPE)
+-    if(target_type STREQUAL "STATIC_LIBRARY")
++    get_target_property(is_imported ${target} IMPORTED)
++    if(target_type STREQUAL "STATIC_LIBRARY" AND NOT is_imported)
+       list(INSERT ${out_list} 0 ${target})
+       get_target_property(libs ${target} LINK_LIBRARIES)
+       if(libs)

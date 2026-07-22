@@ -1,0 +1,16 @@
+diff --git a/Makefile.pre.in b/Makefile.pre.in
+index f86d7363e0..c9dabec13d 100644
+--- a/Makefile.pre.in
++++ b/Makefile.pre.in
+@@ -799,0 +800,8 @@
++# These targets execute the freshly built interpreter or load its extension
++# modules, which is impossible when building for a different architecture.
++ifeq ($(BUILD_GNU_TYPE),$(HOST_GNU_TYPE))
++BUILD_ALL_RUNTIME_TARGETS = checksharedmods rundsymutil
++else
++BUILD_ALL_RUNTIME_TARGETS =
++endif
++
+@@ -802 +810 @@
+-		gdbhooks Programs/_testembed scripts checksharedmods rundsymutil build-details.json
++		gdbhooks Programs/_testembed scripts $(BUILD_ALL_RUNTIME_TARGETS) build-details.json

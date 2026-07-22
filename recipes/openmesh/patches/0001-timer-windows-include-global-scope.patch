@@ -1,0 +1,16 @@
+--- src/OpenMesh/Tools/Utils/Timer.cc
++++ src/OpenMesh/Tools/Utils/Timer.cc
+@@ -55,6 +55,12 @@
+ // ----------------------------------------------------------------------------
+ 
+ // ------------------------------------------------------------- namespace ----
+ 
++// Include <windows.h> at global scope: on ARM64 <winbase.h> emits inline
++// _Interlocked* definitions that otherwise land in OpenMesh::Utils and fail.
++#if defined(_WIN32)
++#include <windows.h>
++#endif
++
+ namespace OpenMesh {
+ namespace Utils {
+ 

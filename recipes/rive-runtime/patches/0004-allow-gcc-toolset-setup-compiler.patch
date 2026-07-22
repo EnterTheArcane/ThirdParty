@@ -1,0 +1,10 @@
+--- build/setup_compiler.lua
++++ build/setup_compiler.lua
+@@ -273,6 +273,7 @@
+     description = 'Choose which toolchain to build with',
+     allowed = {
+         { 'clang', 'Build with Clang' },
++        { 'gcc', 'Build with GCC' },
+         { 'msc', 'Build with the Microsoft C/C++ compiler' },
+     },
+     default = 'clang',

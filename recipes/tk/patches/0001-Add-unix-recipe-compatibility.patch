@@ -1,0 +1,33 @@
+Subject: [PATCH] Add unix recipe compatibility
+
+---
+ unix/Makefile.in | 6 +++---
+ unix/configure   | 2 +-
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/unix/Makefile.in b/unix/Makefile.in
+--- a/unix/Makefile.in
++++ b/unix/Makefile.in
+@@ -147 +146,0 @@ CFLAGS\t\t\t= @CFLAGS_DEFAULT@ @CFLAGS@
+-LDFLAGS			= @LDFLAGS_DEFAULT@ @LDFLAGS@
+@@ -339 +338 @@ CC\t\t\t= @CC@
+-${@TK_WINDOWINGSYSTEM@_INCLUDES} ${CFLAGS} ${CFLAGS_WARNING} \
++${@TK_WINDOWINGSYSTEM@_INCLUDES} ${CFLAGS} ${CPPFLAGS} ${CFLAGS_WARNING} \
+@@ -349 +348 @@ DEPEND_SWITCHES = -I${UNIX_DIR} -I${GENERIC_DIR} -I${BMAP_DIR} \
+-${@TK_WINDOWINGSYSTEM@_INCLUDES} ${CFLAGS} -I${TCL_GENERIC_DIR} \
++${@TK_WINDOWINGSYSTEM@_INCLUDES} ${CFLAGS} ${CPPFLAGS} -I${TCL_GENERIC_DIR} \
+@@ -685 +684 @@ ${WISH_EXE}: $(TK_STUB_LIB_FILE) $(WISH_OBJS) $(TK_LIB_FILE) @APP_RSRC_FILE@
+-	${CC} ${CFLAGS} $(WISH_OBJS) @TK_BUILD_LIB_SPEC@ ${LDFLAGS} \
++	${CC} ${CFLAGS} ${CPPFLAGS} $(WISH_OBJS) @TK_BUILD_LIB_SPEC@ ${LDFLAGS} \
+@@ -705 +704 @@ tktest-real: ${TK_STUB_LIB_FILE}
+-	${CC} ${CFLAGS} $(TKTEST_OBJS) @TK_BUILD_LIB_SPEC@ ${LDFLAGS} $(WISH_LIBS) \
++	${CC} ${CFLAGS} ${CPPFLAGS} $(TKTEST_OBJS) @TK_BUILD_LIB_SPEC@ ${LDFLAGS} $(WISH_LIBS) \
+@@ -713 +712 @@ tktest-real: ${TK_STUB_LIB_FILE}
+-#	${CC} ${CFLAGS} test.o tkTest.o tkSquare.o \
++#	${CC} ${CFLAGS} ${CPPFLAGS} test.o tkTest.o tkSquare.o \
+diff --git a/unix/configure b/unix/configure
+--- a/unix/configure
++++ b/unix/configure
+@@ -6862 +6862 @@ main (void)
+-	    case 1: case (sizeof(long long)==sizeof(long)): ;
++	    case 1: case (sizeof(long long)!=sizeof(long)): ;

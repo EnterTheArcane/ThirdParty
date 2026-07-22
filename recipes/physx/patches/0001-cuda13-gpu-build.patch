@@ -1,0 +1,159 @@
+--- a/physx/source/compiler/cmake/linux/CMakeLists.txt
++++ b/physx/source/compiler/cmake/linux/CMakeLists.txt
+@@ -27,7 +27,7 @@
+ STRING(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWERCASE)
+ 
+ #TODO: Fix warnings
+-SET(CLANG_WARNINGS "-ferror-limit=0 -Wall -Wextra -Werror -Weverything\
++SET(CLANG_WARNINGS "-ferror-limit=0 -Wall -Wextra -Weverything\
+     -Wno-unused-but-set-variable \
+     -Wno-switch-default \
+     -Wno-cast-qual \
+@@ -80,1 +80,1 @@
+-SET(GCC_WARNINGS "-Wall -Werror \
++SET(GCC_WARNINGS "-Wall \
+--- a/physx/source/compiler/cmake/mac/CMakeLists.txt
++++ b/physx/source/compiler/cmake/mac/CMakeLists.txt
+@@ -34,7 +34,7 @@
+     SET(ARCH_SIMD_FLAG "-msse2")
+ ENDIF()
+ 
+-SET(PHYSX_CXX_FLAGS "${OSX_BITNESS} ${ARCH_SIMD_FLAG} -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections -Werror -ferror-limit=0 -Wall -Wextra -fstrict-aliasing -Wstrict-aliasing=2 -Weverything -Wno-unknown-warning-option -Wno-documentation-deprecated-sync -Wno-documentation-unknown-command -Wno-float-equal -Wno-padded -Wno-weak-vtables -Wno-cast-align -Wno-conversion -Wno-missing-noreturn -Wno-missing-variable-declarations -Wno-shift-sign-overflow -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors -Wno-missing-prototypes -Wno-unreachable-code -Wno-unused-macros -Wno-unused-member-function -Wno-used-but-marked-unused -Wno-weak-template-vtables -Wno-deprecated -Wno-non-virtual-dtor -Wno-invalid-noreturn -Wno-return-type-c-linkage -Wno-reserved-id-macro -Wno-c++98-compat-pedantic -Wno-unused-local-typedef -Wno-old-style-cast -Wno-newline-eof -Wno-unused-private-field -Wno-undefined-reinterpret-cast -Wno-invalid-offsetof -Wno-zero-as-null-pointer-constant -Wno-atomic-implicit-seq-cst -Wno-suggest-destructor-override -Wno-suggest-override -Wno-alloca -Wno-switch-enum -Wno-unused-but-set-variable -Wno-shadow-field -gdwarf-2" CACHE INTERNAL "PhysX CXX")
++SET(PHYSX_CXX_FLAGS "${OSX_BITNESS} ${ARCH_SIMD_FLAG} -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections -ferror-limit=0 -Wall -Wextra -fstrict-aliasing -Wstrict-aliasing=2 -Weverything -Wno-unknown-warning-option -Wno-documentation-deprecated-sync -Wno-documentation-unknown-command -Wno-float-equal -Wno-padded -Wno-weak-vtables -Wno-cast-align -Wno-conversion -Wno-missing-noreturn -Wno-missing-variable-declarations -Wno-shift-sign-overflow -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors -Wno-missing-prototypes -Wno-unreachable-code -Wno-unused-macros -Wno-unused-member-function -Wno-used-but-marked-unused -Wno-weak-template-vtables -Wno-deprecated -Wno-non-virtual-dtor -Wno-invalid-noreturn -Wno-return-type-c-linkage -Wno-reserved-id-macro -Wno-c++98-compat-pedantic -Wno-unused-local-typedef -Wno-old-style-cast -Wno-newline-eof -Wno-unused-private-field -Wno-undefined-reinterpret-cast -Wno-invalid-offsetof -Wno-zero-as-null-pointer-constant -Wno-atomic-implicit-seq-cst -Wno-suggest-destructor-override -Wno-suggest-override -Wno-alloca -Wno-switch-enum -Wno-unused-but-set-variable -Wno-shadow-field -gdwarf-2" CACHE INTERNAL "PhysX CXX")
+ 
+ SET(CMAKE_SHARED_LINKER_FLAGS_CHECKED "")
+ SET(CMAKE_SHARED_LINKER_FLAGS_PROFILE "")
+@@ -87,12 +87,10 @@
+ INCLUDE(PhysXCooking.cmake)
+ INCLUDE(PhysXExtensions.cmake)
+ INCLUDE(PhysXVehicle.cmake)
+-INCLUDE(PhysXVehicle2.cmake)
+ INCLUDE(PhysXPvdSDK.cmake)
+ INCLUDE(PhysXTask.cmake)
+ INCLUDE(SceneQuery.cmake)
+ INCLUDE(SimulationController.cmake)
+-INCLUDE(FastXml.cmake)
+ 
+ # Set folder PhysX SDK to all common SDK source projects
+ SET_PROPERTY(TARGET PhysX PROPERTY FOLDER "PhysX SDK")
+@@ -100,14 +98,12 @@
+ SET_PROPERTY(TARGET PhysXCommon PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXCooking PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXExtensions PROPERTY FOLDER "PhysX SDK")
+-SET_PROPERTY(TARGET PhysXVehicle PROPERTY FOLDER "PhysX SDK")
+-SET_PROPERTY(TARGET PhysXVehicle2 PROPERTY FOLDER "PhysX SDK")
++SET_PROPERTY(TARGET PhysXVehicle PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET LowLevel PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET LowLevelAABB PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET LowLevelDynamics PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET SceneQuery PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET SimulationController PROPERTY FOLDER "PhysX SDK")
+-SET_PROPERTY(TARGET FastXml PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXPvdSDK PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXTask PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXFoundation PROPERTY FOLDER "PhysX SDK")
+--- a/physx/source/compiler/cmake/mac/PhysXExtensions.cmake
++++ b/physx/source/compiler/cmake/mac/PhysXExtensions.cmake
+@@ -35,4 +35,0 @@
+-SET(PHYSXEXTENSIONS_PLATFORM_OBJECT_FILES
+-	$<TARGET_OBJECTS:FastXml>
+-)
+-
+--- a/physx/source/compiler/cmake/android/CMakeLists.txt
++++ b/physx/source/compiler/cmake/android/CMakeLists.txt
+@@ -27,7 +27,7 @@
+ STRING(TOLOWER "${CMAKE_BUILD_TYPE}" CMAKE_BUILD_TYPE_LOWERCASE)
+ 
+ #TODO: Fix warnings
+-SET(CLANG_WARNINGS "-ferror-limit=0 -Wall -Wextra -Werror -Weverything\
++SET(CLANG_WARNINGS "-ferror-limit=0 -Wall -Wextra -Weverything\
+ 	-Wno-unused-but-set-variable \
+ 	-Wno-switch-default \
+ 	-Wno-cast-qual \
+@@ -85,11 +85,11 @@
+ IF(${ANDROID_ABI} STREQUAL "armeabi-v7a")
+ 	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections -funwind-tables -fvisibility=hidden -fomit-frame-pointer -funswitch-loops -finline-limit=300 -fno-strict-aliasing -fstack-protector ${CLANG_WARNINGS}" CACHE INTERNAL "PhysX CXX")
+ ELSEIF(${ANDROID_ABI} STREQUAL "armeabi-v7a with NEON")
+-	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Werror -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -funwind-tables -fomit-frame-pointer -funswitch-loops -finline-limit=300 -fno-strict-aliasing -fstack-protector ${CLANG_WARNINGS}" CACHE INTERNAL "PhysX CXX")
++	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -funwind-tables -fomit-frame-pointer -funswitch-loops -finline-limit=300 -fno-strict-aliasing -fstack-protector ${CLANG_WARNINGS}" CACHE INTERNAL "PhysX CXX")
+ ELSEIF(${ANDROID_ABI} STREQUAL "arm64-v8a")
+-	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Werror -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections ${CLANG_WARNINGS} " CACHE INTERNAL "PhysX CXX")
++	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections ${CLANG_WARNINGS} " CACHE INTERNAL "PhysX CXX")
+ ELSEIF(${ANDROID_ABI} STREQUAL "x86")
+-	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Werror -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections ${CLANG_WARNINGS} -fpack-struct=8 -malign-double " CACHE INTERNAL "PhysX CXX")
++	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections ${CLANG_WARNINGS} -fpack-struct=8 -malign-double " CACHE INTERNAL "PhysX CXX")
+ ELSEIF(${ANDROID_ABI} STREQUAL "x86_64")
+-	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Werror -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections ${CLANG_WARNINGS} -mstackrealign -msse3 " CACHE INTERNAL "PhysX CXX")
++	SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${COMMON_CXX_FLAGS} -Wall -Wextra -Wpedantic -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections ${CLANG_WARNINGS} -mstackrealign -msse3 " CACHE INTERNAL "PhysX CXX")
+ ENDIF()
+--- a/physx/source/compiler/cmake/ios/CMakeLists.txt
++++ b/physx/source/compiler/cmake/ios/CMakeLists.txt
+@@ -25,4 +25,4 @@
+ ## Copyright (c) 2008-2022 NVIDIA Corporation. All rights reserved.
+ 
+ 
+-SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections -ferror-limit=0 -Wall -Wextra -Werror -fstrict-aliasing -Wstrict-aliasing=2 -Weverything -Wno-unknown-warning-option -Wno-documentation-deprecated-sync -Wno-documentation-unknown-command -Wno-float-equal -Wno-padded -Wno-weak-vtables -Wno-cast-align -Wno-conversion -Wno-missing-noreturn -Wno-missing-variable-declarations -Wno-shift-sign-overflow -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors -Wno-missing-prototypes -Wno-unreachable-code -Wno-unused-macros -Wno-unused-member-function -Wno-used-but-marked-unused -Wno-weak-template-vtables -Wno-deprecated -Wno-non-virtual-dtor -Wno-invalid-noreturn -Wno-return-type-c-linkage -Wno-reserved-id-macro -Wno-c++98-compat-pedantic -Wno-unused-local-typedef -Wno-old-style-cast -Wno-newline-eof -Wno-unused-private-field -Wno-undefined-reinterpret-cast -Wno-invalid-offsetof -Wno-zero-as-null-pointer-constant -Wno-atomic-implicit-seq-cst -Wno-unused-but-set-variable -Wno-suggest-override -Wno-suggest-destructor-override -Wno-alloca -Wno-switch-enum -Wno-shadow-field -gdwarf-2" CACHE INTERNAL "PhysX CXX")
++SET(PHYSX_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11 -fno-rtti -fno-exceptions -ffunction-sections -fdata-sections -ferror-limit=0 -Wall -Wextra -fstrict-aliasing -Wstrict-aliasing=2 -Weverything -Wno-unknown-warning-option -Wno-documentation-deprecated-sync -Wno-documentation-unknown-command -Wno-float-equal -Wno-padded -Wno-weak-vtables -Wno-cast-align -Wno-conversion -Wno-missing-noreturn -Wno-missing-variable-declarations -Wno-shift-sign-overflow -Wno-covered-switch-default -Wno-exit-time-destructors -Wno-global-constructors -Wno-missing-prototypes -Wno-unreachable-code -Wno-unused-macros -Wno-unused-member-function -Wno-used-but-marked-unused -Wno-weak-template-vtables -Wno-deprecated -Wno-non-virtual-dtor -Wno-invalid-noreturn -Wno-return-type-c-linkage -Wno-reserved-id-macro -Wno-c++98-compat-pedantic -Wno-unused-local-typedef -Wno-old-style-cast -Wno-newline-eof -Wno-unused-private-field -Wno-undefined-reinterpret-cast -Wno-invalid-offsetof -Wno-zero-as-null-pointer-constant -Wno-atomic-implicit-seq-cst -Wno-unused-but-set-variable -Wno-suggest-override -Wno-suggest-destructor-override -Wno-alloca -Wno-switch-enum -Wno-shadow-field -gdwarf-2" CACHE INTERNAL "PhysX CXX")
+@@ -75,12 +75,10 @@
+ INCLUDE(PhysXCooking.cmake)
+ INCLUDE(PhysXExtensions.cmake)
+ INCLUDE(PhysXVehicle.cmake)
+-INCLUDE(PhysXVehicle2.cmake)
+ INCLUDE(PhysXPvdSDK.cmake)
+ INCLUDE(PhysXTask.cmake)
+ INCLUDE(SceneQuery.cmake)
+ INCLUDE(SimulationController.cmake)
+-INCLUDE(FastXml.cmake)
+ 
+ # Set folder PhysX SDK to all common SDK source projects
+ SET_PROPERTY(TARGET PhysX PROPERTY FOLDER "PhysX SDK")
+@@ -88,14 +86,12 @@
+ SET_PROPERTY(TARGET PhysXCommon PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXCooking PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXExtensions PROPERTY FOLDER "PhysX SDK")
+-SET_PROPERTY(TARGET PhysXVehicle PROPERTY FOLDER "PhysX SDK")
+-SET_PROPERTY(TARGET PhysXVehicle2 PROPERTY FOLDER "PhysX SDK")
++SET_PROPERTY(TARGET PhysXVehicle PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET LowLevel PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET LowLevelAABB PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET LowLevelDynamics PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET SceneQuery PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET SimulationController PROPERTY FOLDER "PhysX SDK")
+-SET_PROPERTY(TARGET FastXml PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXPvdSDK PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXTask PROPERTY FOLDER "PhysX SDK")
+ SET_PROPERTY(TARGET PhysXFoundation PROPERTY FOLDER "PhysX SDK")
+--- a/physx/source/compiler/cmake/ios/PhysXExtensions.cmake
++++ b/physx/source/compiler/cmake/ios/PhysXExtensions.cmake
+@@ -35,4 +35,0 @@
+-SET(PHYSXEXTENSIONS_PLATFORM_OBJECT_FILES
+-	$<TARGET_OBJECTS:FastXml>
+-)
+-
+--- a/physx/source/cudamanager/src/CudaContextManager.cpp
++++ b/physx/source/cudamanager/src/CudaContextManager.cpp
+@@ -578,1 +578,1 @@
+-			status = cuCtxCreate(&mCtx, (unsigned int)flags, mDevHandle);
++			status = cuCtxCreate(&mCtx, NULL, (unsigned int)flags, mDevHandle);
+--- a/physx/source/foundation/FdTempAllocator.cpp
++++ b/physx/source/foundation/FdTempAllocator.cpp
+@@ -67,1 +67,1 @@
+-	PxU32 index = PxMax(PxHighestSetBit(PxU32(size) + sizeof(Chunk) - 1), sMinIndex);
++	PxU32 index = PxMax(PxHighestSetBit(PxU32(size + sizeof(Chunk) - 1)), sMinIndex);
+--- a/physx/source/foundation/unix/FdUnixFPU.cpp
++++ b/physx/source/foundation/unix/FdUnixFPU.cpp
+@@ -35,1 +35,1 @@
+-#if PX_OSX
++#if PX_OSX && PX_INTEL_FAMILY
+@@ -44,1 +44,1 @@
+-#elif PX_OSX
++#elif PX_OSX && PX_INTEL_FAMILY
+@@ -69,1 +69,1 @@
+-#elif PX_OSX
++#elif PX_OSX && PX_INTEL_FAMILY
+@@ -85,1 +85,1 @@
+-#elif PX_OSX
++#elif PX_OSX && PX_INTEL_FAMILY
+@@ -101,1 +101,1 @@
+-#elif PX_OSX
++#elif PX_OSX && PX_INTEL_FAMILY

@@ -1,0 +1,15 @@
+diff --git a/qtdeclarative/tools/CMakeLists.txt b/qtdeclarative/tools/CMakeLists.txt
+--- a/qtdeclarative/tools/CMakeLists.txt
++++ b/qtdeclarative/tools/CMakeLists.txt
+@@ -3,11 +3,9 @@
+ 
+ # Generated from tools.pro.
+ 
+-add_subdirectory(qmldom)
+ if(QT_FEATURE_commandlineparser)
+     add_subdirectory(qmllint)
+     add_subdirectory(qmltc)
+     add_subdirectory(qmltyperegistrar)
+-    add_subdirectory(qmljsrootgen)
+     add_subdirectory(qmlformat)
+     if(QT_FEATURE_qmlcontextpropertydump)

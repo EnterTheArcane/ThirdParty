@@ -1,0 +1,27 @@
+--- sources/pyside-tools/CMakeLists.txt
++++ sources/pyside-tools/CMakeLists.txt
+@@ -79,13 +79,17 @@ else()
+     endforeach()
+ 
+     foreach(directory ${directories})
+-        install(DIRECTORY "${directory}"
+-                DESTINATION bin
+-                FILE_PERMISSIONS
+-                OWNER_EXECUTE OWNER_WRITE OWNER_READ
+-                GROUP_EXECUTE GROUP_READ
+-                WORLD_EXECUTE WORLD_READ
+-                PATTERN "android_utilities.py" EXCLUDE) # excluding the symlink
++        if(EXISTS "${directory}")
++            install(DIRECTORY "${directory}"
++                    DESTINATION bin
++                    FILE_PERMISSIONS
++                    OWNER_EXECUTE OWNER_WRITE OWNER_READ
++                    GROUP_EXECUTE GROUP_READ
++                    WORLD_EXECUTE WORLD_READ
++                    PATTERN "android_utilities.py" EXCLUDE) # excluding the symlink
++        else()
++            message(STATUS "Skipping optional tool directory: ${directory}")
++        endif()
+     endforeach()
+ 
+     # dealing with android_utilities.py

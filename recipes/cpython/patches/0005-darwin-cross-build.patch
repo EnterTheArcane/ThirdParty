@@ -1,0 +1,22 @@
+diff --git a/configure.ac b/configure.ac
+index aed1494673..518c5bd973 100644
+--- a/configure.ac
++++ b/configure.ac
+@@ -334,0 +335 @@
++		ac_sys_release=`uname -r`
+@@ -350 +351,3 @@
+-	ac_sys_release=
++	if test "$ac_sys_system" != "Darwin"; then
++		ac_sys_release=
++	fi
+diff --git a/configure b/configure
+index 2088290f0e..eed03b2883 100755
+--- a/configure
++++ b/configure
+@@ -4122,0 +4123 @@
++		ac_sys_release=`uname -r`
+@@ -4138 +4139,3 @@
+-	ac_sys_release=
++	if test "$ac_sys_system" != "Darwin"; then
++		ac_sys_release=
++	fi

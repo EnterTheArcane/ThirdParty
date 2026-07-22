@@ -1,0 +1,11 @@
+--- premake5_v2.lua
++++ premake5_v2.lua
+@@ -169,7 +169,7 @@
+ 
+     filter('system:windows')
+     do
+-        architecture('x64')
++        architecture(_OPTIONS['arch'] == 'arm64' and 'ARM64' or 'x64')
+         defines({ '_USE_MATH_DEFINES' })
+     end
+ 

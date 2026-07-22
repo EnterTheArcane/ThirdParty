@@ -1,0 +1,36 @@
+Subject: [PATCH] Add windows recipe compatibility
+
+Build Tk against the packaged Tcl installation, keep Tk's local nmake support
+files, and disable compiler-version-specific whole-program optimization.
+
+diff --git a/win/rules-ext.vc b/win/rules-ext.vc
+--- a/win/rules-ext.vc
++++ b/win/rules-ext.vc
+@@ -45 +45 @@ macro to the name of the project makefile.
+-_RULESDIR = $(TCLDIR:/=\)
++_RULESDIR = .
+@@ -57 +57 @@ _RULESDIR=$(INSTALLDIR:/=\)
+-_RULESDIR = ..\..\tcl
++_RULESDIR = .
+@@ -69 +69 @@ _RULESDIR = ..\..\tcl
+-_RULESDIR = $(_RULESDIR)\lib\nmake
++_RULESDIR = .
+@@ -71 +71 @@ _RULESDIR = ..\..\tcl
+-_RULESDIR = $(_RULESDIR)\win
++_RULESDIR = .
+diff --git a/win/rules.vc b/win/rules.vc
+--- a/win/rules.vc
++++ b/win/rules.vc
+@@ -260 +260 @@ _TCL_H = ..\generic\tcl.h
+-TCLINSTALL = 0 # Tk always builds against Tcl source, not an installed Tcl
++TCLINSTALL = 1 # The recipe builds against the packaged Tcl installation
+@@ -270 +270 @@ TCLINSTALL = 0 # Tk always builds against Tcl source, not an installed Tcl
+-_TCL_H  = $(_TCLDIR)\generic\tcl.h
++_TCL_H  = $(_TCLDIR)\include\tcl.h
+@@ -272 +272 @@ TCLINSTALL = 0 # Tk always builds against Tcl source, not an installed Tcl
+-!error Could not locate tcl.h. Please set the TCLDIR macro to point to the Tcl *source* directory.
++!error Could not locate tcl.h. Please set the TCLDIR macro to point to the Tcl installation directory.
+@@ -634 +633,0 @@ OPTIMIZATIONS  = $(OPTIMIZATIONS) -GS
+-OPTIMIZATIONS  = $(OPTIMIZATIONS) -GL
+@@ -1526 +1525,0 @@ carch = $(carch) /DHAVE_CPUID=1
+-cwarn = $(cwarn) -WX

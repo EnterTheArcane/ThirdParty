@@ -1,0 +1,11 @@
+--- build/rive_build_config.lua
++++ build/rive_build_config.lua
+@@ -313,7 +313,7 @@
+ 
+ filter('system:windows')
+ do
+-    architecture('x64')
++    architecture(_OPTIONS['arch'] == 'arm64' and 'ARM64' or 'x64')
+     defines({ '_USE_MATH_DEFINES', 'NOMINMAX' })
+ end
+ 

@@ -1,0 +1,34 @@
+--- a/Makefile.in
++++ b/Makefile.in
+@@ -2463,6 +2463,6 @@
+-$(libtool_1): $(ltmain_sh)
+-	$(AM_V_GEN)$(update_mans) -n 'Provide generalized library-building support services' --help-option=--help-all libtool
+-$(libtoolize_1): $(libtoolize_in)
+-	$(AM_V_GEN)$(update_mans) -n 'Prepare a package to use libtool' libtoolize
+-$(libtoolnextv_1): $(libtoolnextv_in)
+-	$(AM_V_GEN)$(update_mans) -n 'Determines next version to use for a libtool library' libtool-next-version
++#$(libtool_1): $(ltmain_sh)
++#	$(AM_V_GEN)$(update_mans) -n 'Provide generalized library-building support services' --help-option=--help-all libtool
++#$(libtoolize_1): $(libtoolize_in)
++#	$(AM_V_GEN)$(update_mans) -n 'Prepare a package to use libtool' libtoolize
++#$(libtoolnextv_1): $(libtoolnextv_in)
++#	$(AM_V_GEN)$(update_mans) -n 'Determines next version to use for a libtool library' libtool-next-version
+--- a/libtoolize.in
++++ b/libtoolize.in
+@@ -1961,10 +1961,11 @@
+   pkgmacro_files="@pkgmacro_files@"
+ 
+   # Locations for important files:
+-  prefix="@prefix@"
+-  datadir="@datadir@"
+-  pkgauxdir="@pkgauxdir@"
+-  pkgltdldir="@pkgdatadir@"
+-  aclocaldir="@aclocaldir@"
++  scriptdir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
++  prefix="$scriptdir/.."
++  datadir="$scriptdir/../res"
++  pkgauxdir="$scriptdir/../res/libtool/build-aux"
++  pkgltdldir="$scriptdir/../res/libtool"
++  aclocaldir="$scriptdir/../res/aclocal"
+ 
+   # Allow the user to override the master libtoolize repository:

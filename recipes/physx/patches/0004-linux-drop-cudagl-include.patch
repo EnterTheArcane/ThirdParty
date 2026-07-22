@@ -1,0 +1,5 @@
+--- physx/source/cudamanager/src/CudaContextManager.cpp
++++ physx/source/cudamanager/src/CudaContextManager.cpp
+@@ -91,1 +91,1 @@
+-#include <cudaGL.h>
++// cudaGL.h removed on Linux: CUDA 13 forces <GL/gl.h> and PhysX uses no GL interop

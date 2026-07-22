@@ -1,0 +1,12 @@
+--- src/CMakeLists.txt
++++ src/CMakeLists.txt
+@@ -1468,3 +1468,9 @@
+   add_dependencies (doxygen hdf5lib_doc)
+ 
+ endif ()
++
++# Work around an MSVC ARM64 optimizer internal compiler error (C1001) when
++# compiling the large static type-initialization table at /O2.
++if (MSVC AND CMAKE_SYSTEM_PROCESSOR MATCHES "ARM64|arm64|aarch64")
++  set_source_files_properties (${HDF5_SRC_DIR}/H5Tinit_float.c PROPERTIES COMPILE_OPTIONS "/Od")
++endif ()

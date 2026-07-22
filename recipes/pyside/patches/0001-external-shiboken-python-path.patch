@@ -1,0 +1,14 @@
+--- sources/pyside6/cmake/Macros/PySideModules.cmake
++++ sources/pyside6/cmake/Macros/PySideModules.cmake
+@@ -347,7 +347,9 @@ macro(create_pyside_module)
+     # on the host machine (usually, unless you use some userspace qemu based mechanism).
+     # TODO: Can we do something better here to still get pyi files?
+     if(NOT (PYSIDE_IS_CROSS_BUILD OR DISABLE_PYI))
+-        set(SHIBOKEN_PYTHON_MODULE_DIR "${PYTHON_SITE_PACKAGES}/shiboken6")
++        if(NOT SHIBOKEN_PYTHON_MODULE_DIR)
++            set(SHIBOKEN_PYTHON_MODULE_DIR "${PYTHON_SITE_PACKAGES}/shiboken6")
++        endif()
+         set(generate_pyi_options ${module_NAME} --sys-path
+             "${pysidebindings_BINARY_DIR}"
+             "${SHIBOKEN_PYTHON_MODULE_DIR}/.."
+

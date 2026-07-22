@@ -1,0 +1,16 @@
+--- cmake/JPEGCodec.cmake
++++ cmake/JPEGCodec.cmake
+@@ -101,8 +101,11 @@
+     # Set up includes and libraries for the check
+     # For targets, we need to explicitly get the include directories
+-    if(TARGET ${JPEG_LIBRARIES})
++    # JPEG_LIBRARIES may expand to several imported targets (libjpeg-turbo exports separate
++    # jpeg and turbojpeg targets), but if(TARGET ...) accepts only one argument. Test the first.
++    list(GET JPEG_LIBRARIES 0 _jpeg_first_lib)
++    if(TARGET ${_jpeg_first_lib})
+         # It's an imported target - extract properties
+-        get_target_property(_jpeg_includes ${JPEG_LIBRARIES} INTERFACE_INCLUDE_DIRECTORIES)
++        get_target_property(_jpeg_includes ${_jpeg_first_lib} INTERFACE_INCLUDE_DIRECTORIES)
+         if(_jpeg_includes)
+             set(CMAKE_REQUIRED_INCLUDES "${_jpeg_includes}")
+         endif()

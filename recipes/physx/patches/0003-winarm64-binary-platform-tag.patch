@@ -1,0 +1,30 @@
+--- physx/source/physxextensions/src/serialization/SnSerialUtils.cpp
++++ physx/source/physxextensions/src/serialization/SnSerialUtils.cpp
+@@ -41,1 +41,1 @@
+-#define SN_NUM_BINARY_PLATFORMS 9
++#define SN_NUM_BINARY_PLATFORMS 13
+@@ -52,1 +52,5 @@
+-	PX_MAKE_FOURCC('L','A','6','4')
++	PX_MAKE_FOURCC('L','A','6','4'),
++	PX_MAKE_FOURCC('A','N','D','R'),
++	PX_MAKE_FOURCC('A','A','6','4'),
++	PX_MAKE_FOURCC('M','A','6','4'),
++	PX_MAKE_FOURCC('W','A','6','4')
+@@ -65,1 +69,5 @@
+-	"linuxaarch64"
++	"linuxaarch64",
++	"android",
++	"ios64",
++	"macarm64",
++	"winarm64"
+@@ -92,1 +100,9 @@
+-#else
++#elif PX_ANDROID
++	return sBinaryPlatformTags[9];
++#elif PX_IOS && PX_A64
++	return sBinaryPlatformTags[10];
++#elif PX_OSX && PX_A64
++	return sBinaryPlatformTags[11];
++#elif PX_WINDOWS_FAMILY && PX_A64
++	return sBinaryPlatformTags[12];
++#else

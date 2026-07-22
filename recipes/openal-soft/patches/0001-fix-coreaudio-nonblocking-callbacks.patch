@@ -1,0 +1,14 @@
+diff --git a/alc/backends/coreaudio.cpp b/alc/backends/coreaudio.cpp
+index 0000000..0000000 100644
+--- a/alc/backends/coreaudio.cpp
++++ b/alc/backends/coreaudio.cpp
+@@ -643,6 +643,9 @@ bool CoreAudioPlayback::reset()
+     /* setup callback */
+     mFrameSize = mDevice->frameSizeFromFmt();
+     AURenderCallbackStruct input{};
++#pragma clang diagnostic push
++#pragma clang diagnostic ignored "-Wfunction-effects"
+     input.inputProc = [](void *inRefCon, AudioUnitRenderActionFlags *ioActionFlags, const AudioTimeStamp *inTimeStamp, UInt32 inBusNumber, UInt32 inNumberFrames, AudioBufferList *ioData) noexcept
+     { return static_cast<CoreAudioPlayback*>(inRefCon)->MixerProc(ioActionFlags, inTimeStamp, inBusNumber, inNumberFrames, ioData); };
++#pragma clang diagnostic pop
+     input.inputProcRefCon = this;
