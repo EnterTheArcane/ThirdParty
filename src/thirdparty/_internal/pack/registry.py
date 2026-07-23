@@ -475,14 +475,23 @@ class OciRegistryClient:
         (dest / ".thirdparty-oci.json").write_text(
             json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
 
-    def platform_tag(self, tag: str, platform: "dict[str, Any]") -> str:
-        """Per-platform tag, e.g. ``1.3.2-android-arm64`` - a stable, collision-free handle
-        each CI runner can push in parallel without racing on the shared multi-arch tag."""
+    def platform_tag(self, tag: str, manifest_desc: "dict[str, Any]") -> str:
+        """Per-platform tag, e.g. ``1.3.2-mac-arm`` - a stable, collision-free handle each CI
+        runner can push in parallel without racing on the shared multi-arch tag.
+
+        Uses the thirdparty ``package_id`` (O3DE ``<os>-<arch>`` naming, e.g. ``mac-arm``) from the
+        manifest's annotations so registry tags match the rest of the build system; falls back to the
+        OCI platform (``darwin-arm64``) for images that don't carry that annotation."""
+        ann = cast("dict[str, Any]", manifest_desc.get("annotations") or {})
+        package_id = ann.get("io.o3de.thirdparty.package_id")
+        if package_id:
+            return f"{tag}-{package_id}"
+        platform = cast("dict[str, Any]", manifest_desc.get("platform") or {})
         return f"{tag}-{platform.get('os')}-{platform.get('architecture')}"
 
     def push_layout(self, layout_dir: Path, tag: str, *, dry_run: bool = False) -> str:
         """Push every blob + the manifest from *layout_dir* under the per-platform tag
-        ``<tag>-<os>-<arch>``.
+        ``<tag>-<package_id>`` (e.g. ``1.3.2-mac-arm``).
 
         Never touches the shared multi-arch ``tag`` - that is assembled separately by
         :meth:`combine_index`, so parallel runners never race.  Returns the pushed manifest
@@ -490,8 +499,7 @@ class OciRegistryClient:
         index_doc = json.loads((layout_dir / "index.json").read_text(encoding="utf-8"))
         manifest_desc = index_doc["manifests"][0]
         manifest_digest = manifest_desc["digest"]
-        platform = manifest_desc.get("platform", {})
-        plat_tag = self.platform_tag(tag, platform)
+        plat_tag = self.platform_tag(tag, manifest_desc)
         blobs = layout_dir / "blobs" / "sha256"
 
         manifest_bytes = (blobs / manifest_digest.split(":", 1)[1]).read_bytes()

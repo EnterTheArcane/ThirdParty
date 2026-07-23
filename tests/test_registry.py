@@ -149,9 +149,24 @@ class PublishTests(unittest.TestCase):
             self.assertTrue(reg.calls[0][1].endswith("/v2/"))  # challenge probe first
             self.assertEqual(methods.count("HEAD"), 2)   # config + layer blob checks
             self.assertEqual(methods.count("POST"), 2)   # config + layer uploads
-            # only the per-platform tag is written; the shared multi-arch tag is never touched
-            self.assertIn("1.3.2-windows-amd64", reg.tags)
+            # only the per-platform tag is written (O3DE package_id naming, not OCI darwin/amd64);
+            # the shared multi-arch tag is never touched
+            self.assertIn("1.3.2-windows-x64", reg.tags)
             self.assertIsNone(reg.index("1.3.2"))
+
+    def test_per_platform_tag_uses_o3de_package_id_but_index_stays_oci(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            layout = _layout(Path(tmp), _meta("Mac", "ARM", "mac-arm"), "mac")
+            reg = _FakeRegistry()
+            with patch.dict("os.environ", {"GH_TOKEN": "t"}, clear=False):
+                client = _client(reg)
+                client.push_layout(layout, "1.3.2")
+                client.combine_index("1.3.2")
+            # registry tag uses O3DE package_id naming (mac-arm), NOT the OCI form (darwin-arm64)
+            self.assertIn("1.3.2-mac-arm", reg.tags)
+            self.assertNotIn("1.3.2-darwin-arm64", reg.tags)
+            # but the multi-arch index platform stays OCI-standard for tooling + `oci pull --platform`
+            self.assertEqual(reg.platforms("1.3.2"), [("darwin", "arm64")])
 
     def test_bearer_challenge_is_discovered_from_realm_host(self):
         with tempfile.TemporaryDirectory() as tmp:
