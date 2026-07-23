@@ -20,11 +20,17 @@ class Recipe(RecipeBase[_Options]):
         repo = GithubRepository(self, "jrouwe/JoltPhysics")
         return Version(repo.latest_release.removeprefix("v"))
 
+    @property
+    def _use_vulkan(self):
+        # Jolt's Vulkan GPU-compute backend compiles its shaders with DXC, which Microsoft ships
+        # only as an x86_64 Linux binary and which must run on the build machine. Enable it only
+        # when the build host is x86_64; on other hosts (e.g. an arm64 container) DXC cannot run,
+        # so fall back to Jolt's always-available CPU compute implementation.
+        return self.settings.os == "Linux" and str(self.settings_build.arch) == "X64"
+
     def requirements(self):
         self.requires_tool("cmake")
-        if self.settings.os == "Linux":
-            # Jolt compiles its Vulkan shaders with DXC and loads Vulkan at runtime.
-            # DXC must run on the build machine when cross-compiling Linux ARM.
+        if self._use_vulkan:
             self.requires_tool("directxshadercompiler")
             self.requires("vulkan-headers")
             self.requires("vulkan-loader")
@@ -49,10 +55,10 @@ class Recipe(RecipeBase[_Options]):
         # Use the native GPU compute backend where the complete shader toolchain is
         # available, while retaining Jolt's CPU implementation as a fallback.
         tc.cache_variables["JPH_USE_DX12"] = self.settings.os == "Windows"
-        tc.cache_variables["JPH_USE_VK"] = self.settings.os == "Linux"
+        tc.cache_variables["JPH_USE_VK"] = self._use_vulkan
         tc.cache_variables["JPH_USE_MTL"] = False
         tc.cache_variables["JPH_USE_CPU_COMPUTE"] = True
-        if self.settings.os == "Linux":
+        if self._use_vulkan:
             dxc = self.dependencies.build["directxshadercompiler"].folders.package / "bin" / "dxc"
             # Jolt 5.6 derives dxc from FindVulkan's glslc path. Point that cache
             # entry directly at the packaged compiler; replacing "glslc" is then a no-op.

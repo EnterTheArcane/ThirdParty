@@ -2,7 +2,7 @@ import os
 
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
-from thirdparty.files import get, load, save
+from thirdparty.files import copy, get, load, save
 from thirdparty.scm import GithubRepository, Version
 
 
@@ -58,6 +58,10 @@ class Recipe(RecipeBase[_Options]):
         save(self, self.folders.package / "licenses" / "LICENSE", self._extract_license())
         cmake = CMake(self)
         cmake.install()
+        # The installed public ioapi.h does `#include "ints.h"`, a contrib header CMake's install
+        # step omits; ship it so consumers (e.g. assimp) can compile against minizip.
+        copy(self, "ints.h", src=self.folders.source / "contrib" / "minizip",
+             dst=self.folders.package / "include" / "minizip")
 
     def package_info(self):
         self.info.libs = ["minizip"]

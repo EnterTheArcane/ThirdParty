@@ -1,4 +1,5 @@
 import os
+import shutil
 
 from thirdparty import RecipeBase
 from thirdparty.cmake import CMake, CMakeToolchain
@@ -43,7 +44,9 @@ class Recipe(RecipeBase):
         # Build against our cpython recipe, not the container's system interpreter (which has no dev
         # headers). PYBIND11_FINDPYTHON runs find_package(Python COMPONENTS Development.Module), so
         # point FindPython/FindPython3 at cpython's package (matches the pyside recipe's approach).
-        python_root = self.dependencies["cpython"].folders.package.as_posix()
+        python = self.dependencies["cpython"]
+        python_root = python.folders.package.as_posix()
+        major, minor = str(python.version).split(".")[:2]
         if self.settings.os == "Windows":
             py_exe = f"{python_root}/bin/python3.exe"
             py_inc = f"{python_root}/bin/include"
@@ -52,13 +55,28 @@ class Recipe(RecipeBase):
             extension = "dylib" if self.settings.os == "Mac" else "so"
             py_exe = f"{python_root}/bin/python3"
             py_inc = f"{python_root}/include/python"
-            py_lib = f"{python_root}/lib/libpython3.{extension}"
+            # FindPython validates Development.Module against a *versioned* library filename, but
+            # the cpython recipe ships an unversioned libpython3; expose a versioned-named copy.
+            versioned_lib = self.folders.build / f"libpython{major}.{minor}.{extension}"
+            shutil.copy2(f"{python_root}/lib/libpython3.{extension}", versioned_lib)
+            py_lib = versioned_lib.as_posix()
+        # PYBIND11_FINDPYTHON requests COMPONENTS Development.Module *without* Interpreter, so
+        # FindPython never runs the interpreter to learn the module ABI tag, and the cpython
+        # recipe's unversioned libpython gives it nothing to derive one from - supply it directly.
+        soabi = None
+        if self.settings.os == "Mac":
+            soabi = f"cpython-{major}{minor}-darwin"
+        elif self.settings.os != "Windows":
+            arch = "aarch64" if self.settings.arch == "ARM" else "x86_64"
+            soabi = f"cpython-{major}{minor}-{arch}-linux-gnu"
         for prefix in ("Python", "Python3"):
             tc.variables[f"{prefix}_ROOT_DIR"] = python_root
             tc.variables[f"{prefix}_FIND_STRATEGY"] = "LOCATION"
             tc.variables[f"{prefix}_EXECUTABLE"] = py_exe
             tc.variables[f"{prefix}_INCLUDE_DIR"] = py_inc
             tc.variables[f"{prefix}_LIBRARY"] = py_lib
+            if soabi:
+                tc.variables[f"{prefix}_SOABI"] = soabi
             if self.settings.os == "Windows":
                 tc.variables[f"{prefix}_FIND_REGISTRY"] = "NEVER"
         tc.generate()

@@ -1115,6 +1115,12 @@ class GenericSystemBlock(Block):
         arch_host = self._recipe.settings.arch
         if arch_host == "ARM":
             arch_host = {"Windows": "ARM64", "Mac": "arm64"}.get(os_host, "aarch64")
+        elif arch_host == "X64":
+            # Map the recipe's arch name to the platform's canonical CMAKE_SYSTEM_PROCESSOR.
+            # Without this, cross builds get CMAKE_SYSTEM_PROCESSOR=X64, which third-party CMake
+            # code doesn't recognise as x86_64 (e.g. libultrahdr errors out, x265/onnxruntime
+            # silently drop their x86 assembly leaving undefined asm symbols at link time).
+            arch_host = {"Windows": "AMD64", "Mac": "x86_64"}.get(os_host, "x86_64")
 
         if system_name is None:  # Try to deduce
             _system_version = None

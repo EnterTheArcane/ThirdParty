@@ -49,17 +49,7 @@ class Recipe(RecipeBase):
         python = self.dependencies.build["cpython"]
         llvm = self.dependencies.build["llvm"]
         qt = self.dependencies.build["qt"]
-        python_root = Path(python.folders.package)
-        major, minor = str(python.version).split(".")[:2]
-        if python.settings.os == "Windows":
-            python_exe = python_root / "bin" / "python.exe"
-            python_include = python_root / "bin" / "include"
-            python_library = python_root / "bin" / "libs" / f"python{major}{minor}.lib"
-        else:
-            extension = "dylib" if python.settings.os == "Mac" else "so"
-            python_exe = python_root / "bin" / f"python{major}.{minor}"
-            python_include = python_root / "include" / f"python{major}.{minor}"
-            python_library = python_root / "lib" / f"libpython{major}.{minor}.{extension}"
+        python_root, python_exe, python_include, python_library, _ = _python_layout(python)
         qt_root = qt.folders.package
         llvm_root = llvm.folders.package
 
@@ -131,17 +121,39 @@ class Recipe(RecipeBase):
         root = self.folders.package
         generator = root / "bin" / ("shiboken6.exe" if self.settings.os == "Windows" else "shiboken6")
         python = self.dependencies.build["cpython"]
-        major, minor = str(python.version).split(".")[:2]
         if python.settings.os == "Windows":
             site_packages = root / "Lib" / "site-packages"
         else:
-            site_packages = root / "lib" / f"python{major}.{minor}" / "site-packages"
+            site_packages = root / "lib" / "python" / "site-packages"
         for environment in (self.info.buildenv, self.info.runenv):
             environment.prepend_path("PATH", root / "bin")
             environment.prepend_path("PYTHONPATH", site_packages)
 
         self.info.conf.tools.shiboken.generator = generator
         self.info.conf.tools.shiboken.generator_root = root
+
+
+def _python_layout(dependency: RecipeBase) -> tuple[Path, Path, Path, Path, Path]:
+    # The cpython recipe installs an unversioned / major-only layout (bin/python3,
+    # include/python, lib/libpython3.<ext>, lib/python/site-packages) - NOT the classic
+    # versioned python3.X names. Keep this in lockstep with shiboken's _python_layout.
+    root = Path(dependency.folders.package)
+    if dependency.settings.os == "Windows":
+        return (
+            root,
+            root / "bin" / "python3.exe",
+            root / "bin" / "include",
+            root / "bin" / "libs" / "python3.lib",
+            root / "bin" / "Lib" / "site-packages",
+        )
+    extension = "dylib" if dependency.settings.os == "Mac" else "so"
+    return (
+        root,
+        root / "bin" / "python3",
+        root / "include" / "python",
+        root / "lib" / f"libpython3.{extension}",
+        root / "lib" / "python" / "site-packages",
+    )
 
 
 def _remove_all(environment: Environment, name: str, value: Path):

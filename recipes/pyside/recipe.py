@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 
 from thirdparty import RecipeBase
@@ -104,6 +105,17 @@ class Recipe(RecipeBase):
             host_qt_root = self.dependencies.build["qt"].folders.package
             tc.variables["Python_ROOT_DIR"] = python_root.as_posix()
             tc.variables["Python3_ROOT_DIR"] = python_root.as_posix()
+            # Same cross FindPython workaround as shiboken: the cpython recipe installs an
+            # unversioned libpython, but FindPython's cross Development search needs a versioned
+            # library name plus the module ABI tag (it will not run the target interpreter).
+            # Provide a versioned-named copy, the target headers, the host interpreter, and SOABI.
+            discovery_library = _versioned_python_library(self, python, python_library)
+            soabi = _python_soabi(python)
+            for prefix in ("Python", "Python3"):
+                tc.variables[f"{prefix}_EXECUTABLE"] = host_python_exe.as_posix()
+                tc.variables[f"{prefix}_INCLUDE_DIR"] = python_include.as_posix()
+                tc.variables[f"{prefix}_LIBRARY"] = discovery_library.as_posix()
+                tc.variables[f"{prefix}_SOABI"] = soabi
             tc.variables["QFP_PYTHON_TARGET_PATH"] = python_root.as_posix()
             tc.variables["QFP_PYTHON_HOST_PATH"] = host_python_exe.as_posix()
             tc.variables["QFP_QT_HOST_PATH"] = host_qt_root.as_posix()
@@ -224,32 +236,58 @@ class Recipe(RecipeBase):
         self.info.conf.tools.pyside.root = self.folders.package
 
 
-def _python_layout(dependency: RecipeBase) -> tuple[Path, Path, Path, Path, Path]:
-    root = Path(dependency.folders.package)
+def _python_soabi(dependency: RecipeBase) -> str:
+    """Extension-module ABI tag (e.g. ``cpython-314-darwin``) that FindPython cannot derive in a
+    cross build (it will not run the target interpreter and the cpython recipe's unversioned
+    config-dir defeats its fallback). Matches CPython's release naming for the cross targets."""
     major, minor = str(dependency.version).split(".")[:2]
+    if dependency.settings.os == "Mac":
+        return f"cpython-{major}{minor}-darwin"
+    arch = "aarch64" if dependency.settings.arch == "ARM" else "x86_64"
+    return f"cpython-{major}{minor}-{arch}-linux-gnu"
+
+
+def _versioned_python_library(recipe: RecipeBase, dependency: RecipeBase, python_library: Path) -> Path:
+    """Copy the version-neutral target libpython to a versioned filename in the build folder, so
+    FindPython (which derives the ABI from a versioned library name) can resolve it cross-building."""
+    major, minor = str(dependency.version).split(".")[:2]
+    if dependency.settings.os == "Windows":
+        discovery_name = f"python{major}{minor}.lib"
+    else:
+        extension = "dylib" if dependency.settings.os == "Mac" else "so"
+        discovery_name = f"libpython{major}.{minor}.{extension}"
+    discovery_library = Path(recipe.folders.build) / discovery_name
+    shutil.copy2(python_library, discovery_library)
+    return discovery_library
+
+
+def _python_layout(dependency: RecipeBase) -> tuple[Path, Path, Path, Path, Path]:
+    # The cpython recipe installs an unversioned / major-only layout (bin/python3,
+    # include/python, lib/libpython3.<ext>, lib/python/site-packages). Keep in lockstep
+    # with shiboken's _python_layout.
+    root = Path(dependency.folders.package)
     if dependency.settings.os == "Windows":
         return (
             root,
-            root / "bin" / "python.exe",
+            root / "bin" / "python3.exe",
             root / "bin" / "include",
-            root / "bin" / "libs" / f"python{major}{minor}.lib",
+            root / "bin" / "libs" / "python3.lib",
             root / "bin" / "Lib" / "site-packages",
         )
     extension = "dylib" if dependency.settings.os == "Mac" else "so"
     return (
         root,
-        root / "bin" / f"python{major}.{minor}",
-        root / "include" / f"python{major}.{minor}",
-        root / "lib" / f"libpython{major}.{minor}.{extension}",
-        root / "lib" / f"python{major}.{minor}" / "site-packages",
+        root / "bin" / "python3",
+        root / "include" / "python",
+        root / "lib" / f"libpython3.{extension}",
+        root / "lib" / "python" / "site-packages",
     )
 
 
 def _python_site_packages(root: Path, dependency: RecipeBase) -> Path:
-    major, minor = str(dependency.version).split(".")[:2]
     if dependency.settings.os == "Windows":
         return root / "Lib" / "site-packages"
-    return root / "lib" / f"python{major}.{minor}" / "site-packages"
+    return root / "lib" / "python" / "site-packages"
 
 
 def _remove_all(environment: Environment, name: str, value: Path):

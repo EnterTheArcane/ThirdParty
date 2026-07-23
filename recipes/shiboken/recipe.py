@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 
 from thirdparty import RecipeBase
@@ -74,6 +75,21 @@ class Recipe(RecipeBase):
             host_qt_root = self.dependencies.build["qt"].folders.package
             tc.variables["Python_ROOT_DIR"] = python_root.as_posix()
             tc.variables["Python3_ROOT_DIR"] = python_root.as_posix()
+            # The cpython recipe intentionally installs a version-neutral libpython3 name, but
+            # FindPython's cross path (COMPONENTS Development, with no runnable target interpreter)
+            # derives the module ABI from a *versioned* library filename and cannot resolve the
+            # unversioned one. Mirror the openusd recipe: expose a private versioned-named copy of
+            # the target libpython, and point FindPython at the runnable host interpreter for the
+            # target headers/lib, so the Development component resolves.
+            discovery_library = _versioned_python_library(self, python, python_library)
+            soabi = _python_soabi(python)
+            for prefix in ("Python", "Python3"):
+                tc.variables[f"{prefix}_EXECUTABLE"] = host_python_exe.as_posix()
+                tc.variables[f"{prefix}_INCLUDE_DIR"] = python_include.as_posix()
+                tc.variables[f"{prefix}_LIBRARY"] = discovery_library.as_posix()
+                # FindPython cannot run the target interpreter to learn the module ABI tag, and
+                # the unversioned config-dir/python-config prevents it deriving one; provide it.
+                tc.variables[f"{prefix}_SOABI"] = soabi
             tc.variables["QFP_PYTHON_TARGET_PATH"] = python_root.as_posix()
             tc.variables["QFP_PYTHON_HOST_PATH"] = host_python_exe.as_posix()
             tc.variables["QFP_QT_TARGET_PATH"] = qt_root.as_posix()
@@ -146,6 +162,36 @@ class Recipe(RecipeBase):
                 environment.prepend_path("DYLD_LIBRARY_PATH", root / "lib")
             elif self.settings.os in ("Linux", "FreeBSD"):
                 environment.prepend_path("LD_LIBRARY_PATH", root / "lib")
+
+
+def _python_soabi(dependency: RecipeBase) -> str:
+    """The extension-module ABI tag (e.g. ``cpython-314-darwin``). FindPython normally reads it
+    from the interpreter or a versioned ``python-config``, but in a cross build it will not run the
+    target interpreter and the cpython recipe's unversioned config-dir defeats its fallback search,
+    so it must be supplied. Matches CPython's release naming for the supported cross targets."""
+    major, minor = str(dependency.version).split(".")[:2]
+    if dependency.settings.os == "Mac":
+        return f"cpython-{major}{minor}-darwin"
+    arch = "aarch64" if dependency.settings.arch == "ARM" else "x86_64"
+    return f"cpython-{major}{minor}-{arch}-linux-gnu"
+
+
+def _versioned_python_library(recipe: RecipeBase, dependency: RecipeBase, python_library: Path) -> Path:
+    """Copy the version-neutral target libpython to a versioned filename in the build folder.
+
+    The cpython recipe installs an unversioned ``libpython3`` (``python3.lib`` on Windows), but
+    CMake's FindPython derives the module ABI from a *versioned* library name. Mirror the openusd
+    recipe and provide a private versioned-named copy so FindPython's cross Development search works.
+    """
+    major, minor = str(dependency.version).split(".")[:2]
+    if dependency.settings.os == "Windows":
+        discovery_name = f"python{major}{minor}.lib"
+    else:
+        extension = "dylib" if dependency.settings.os == "Mac" else "so"
+        discovery_name = f"libpython{major}.{minor}.{extension}"
+    discovery_library = Path(recipe.folders.build) / discovery_name
+    shutil.copy2(python_library, discovery_library)
+    return discovery_library
 
 
 def _python_layout(dependency: RecipeBase) -> tuple[Path, Path, Path, Path, Path]:

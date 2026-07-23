@@ -445,17 +445,29 @@ class Recipe(RecipeBase[_Options]):
         # since ffmpeg"s build system ignores CC and CXX
         compilers_from_conf = self.conf.tools.build.compiler_executables
         buildenv_vars = VirtualBuildEnv(self).vars()
-        nm = buildenv_vars.get("NM")
+        # When cross-compiling with a triplet-prefixed gcc (e.g. x86_64-linux-gnu-gcc), the sibling
+        # binutils share the triplet. Without them ffmpeg falls back to the build host's binutils,
+        # which can't process the target binaries (e.g. "strip: Unable to recognise the
+        # architecture of the input file"). Derive them from the cross compiler's name.
+        _cross_cc = compilers_from_conf.get("c")
+
+        def _cross_binutil(tool: str) -> str | None:
+            if cross_building(self) and _cross_cc and os.path.basename(str(_cross_cc)).endswith("-gcc"):
+                candidate = str(_cross_cc)[:-3] + tool  # ".../<triplet>-gcc" -> ".../<triplet>-<tool>"
+                if shutil.which(candidate) or os.path.exists(candidate):
+                    return candidate
+            return None
+        nm = buildenv_vars.get("NM") or _cross_binutil("nm")
         if nm:
             args.append(f"--nm={unix_path(self, nm)}")
-        ar = buildenv_vars.get("AR")
+        ar = buildenv_vars.get("AR") or _cross_binutil("ar")
         if ar:
             args.append(f"--ar={unix_path(self, ar)}")
         if self.options.with_asm:
             asm = compilers_from_conf.get("asm", buildenv_vars.get("AS"))
             if asm:
                 args.append(f"--as={unix_path(self, asm)}")
-        strip = buildenv_vars.get("STRIP")
+        strip = buildenv_vars.get("STRIP") or _cross_binutil("strip")
         if strip:
             args.append(f"--strip={unix_path(self, strip)}")
         cc = compilers_from_conf.get("c", buildenv_vars.get("CC", self._default_compilers.get("cc")))
@@ -467,7 +479,7 @@ class Recipe(RecipeBase[_Options]):
         ld = buildenv_vars.get("LD")
         if ld:
             args.append(f"--ld={unix_path(self, ld)}")
-        ranlib = buildenv_vars.get("RANLIB")
+        ranlib = buildenv_vars.get("RANLIB") or _cross_binutil("ranlib")
         if ranlib:
             args.append(f"--ranlib={unix_path(self, ranlib)}")
         pkg_config = self.conf.tools.gnu.pkg_config or buildenv_vars.get("PKG_CONFIG")
@@ -493,6 +505,18 @@ class Recipe(RecipeBase[_Options]):
             # (sibling of the arm64 cross cl) and x64 import libraries, yielding runnable helpers.
             if is_msvc(self) and cc:
                 args.append(f"--host-cc={unix_path(self, self._write_host_cc_wrapper())}")
+            if self.settings.os in ("Linux", "FreeBSD"):
+                # A cross linker does not follow an imported shared library's runpath to resolve
+                # its DT_NEEDED entries (e.g. libpulse.so -> libpulsecommon in lib/pulseaudio), so
+                # it fails with undefined references. Give it link-time-only search paths for every
+                # dependency lib dir, mirroring CMakeToolchain.add_rpath_link for CMake recipes.
+                _seen_rpath_link: set[str] = set()
+                for dependency in self.dependencies.values():
+                    for libdir in dependency.info.aggregated_components().libdirs:
+                        libdir = str(libdir)
+                        if libdir not in _seen_rpath_link:
+                            _seen_rpath_link.add(libdir)
+                            tc.extra_ldflags.append(f"-Wl,-rpath-link,{libdir}")
 
         if tc.cflags:
             cflags = tc.cflags
@@ -756,6 +780,11 @@ class Recipe(RecipeBase[_Options]):
             avutil.requires.append("libdrm::libdrm_libdrm")
         if self.options.with_vaapi:
             avutil.requires.append("vaapi::vaapi")
+            # avutil's hwcontext_vaapi calls vaGetDisplayDRM (libva-drm) and vaGetDisplay
+            # (libva-x11), so those backend libraries must be linked, not just core libva -
+            # otherwise consumers (e.g. openimageio) fail to link with undefined VA symbols.
+            avutil.requires.append("vaapi::va-drm")
+            avutil.requires.append("vaapi::va-x11")
         if self.options.with_xcb:
             avutil.requires.append("libx11::x11")
 

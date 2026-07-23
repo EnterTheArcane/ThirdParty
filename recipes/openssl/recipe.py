@@ -217,6 +217,19 @@ class Recipe(RecipeBase[_Options]):
             self.info.components["crypto"].system_libs.append("socket")
             self.info.components["ssl"].system_libs.append("socket")
 
+        if is_apple_os(self) and self.settings.arch == "X64":
+            # OpenSSL's x86_64 perlasm emits a __mod_init_func pointer to _OPENSSL_cpuid_setup
+            # (which is defined in a different archive member, crypto/cpuid.c). The new Apple
+            # linker (ld-prime) cannot convert that cross-member initializer into the chained-fixup
+            # __init_offsets format and aborts when the static libcrypto/libssl is linked into a
+            # dylib, bundle, or executable:
+            #   ld: fixup error (kind=imageOffset32) at 'anon-33' from inits-file,
+            #       target '_OPENSSL_cpuid_setup' does not have address
+            # Ask x86_64 consumers to keep initializers in the classic __mod_init_func form.
+            # arm64 is unaffected (it always uses chained fixups and links cleanly).
+            self.info.components["crypto"].sharedlinkflags.append("-Wl,-no_fixup_chains")
+            self.info.components["crypto"].exelinkflags.append("-Wl,-no_fixup_chains")
+
         self.info.components["crypto"].set_property("cmake_target_name", "OpenSSL::Crypto")
         self.info.components["crypto"].set_property("pkg_config_name", "libcrypto")
         self.info.components["ssl"].set_property("cmake_target_name", "OpenSSL::SSL")

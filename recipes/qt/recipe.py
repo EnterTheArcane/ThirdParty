@@ -135,7 +135,7 @@ class _Options(RecipeOptions):
     with_fontconfig: bool = True
     with_freetype: bool = True
     with_glib: bool = False
-    with_gssapi: bool = True
+    with_gssapi: bool = False
     with_gstreamer: bool = True
     with_harfbuzz: bool = True
     with_icu: bool = True
@@ -376,8 +376,6 @@ class Recipe(RecipeBase[_Options]):
             self.requires("pulseaudio")
         if self.options.with_dbus:
             self.requires("dbus")
-        if self.settings.os in ["Linux", "FreeBSD"] and self.options.with_gssapi:
-            self.requires("krb5")
         if self.options.with_md4c:
             self.requires("md4c")  # stable API since 0.3x as per md4c wiki
         self.requires_tool("cmake")
@@ -561,8 +559,7 @@ class Recipe(RecipeBase[_Options]):
         tc.absolute_paths = True
         # A cross linker does not consult the target's LD_LIBRARY_PATH when it resolves
         # DT_NEEDED entries of imported shared libraries. Give it link-time-only search
-        # paths for those transitive dependencies (for example, libgssapi_krb5.so needs
-        # the other Kerberos shared libraries from the same package).
+        # paths for those transitive dependencies.
         if cross_building(self) and self.settings.os == "Linux":
             tc.add_rpath_link = True
 
@@ -1228,8 +1225,6 @@ class Recipe(RecipeBase[_Options]):
             networkReqs.append("openssl::openssl")
         if self.options.with_brotli:
             networkReqs.append("brotli::brotli")
-        if self.settings.os in ["Linux", "FreeBSD"] and self.options.with_gssapi:
-            networkReqs.append("krb5::krb5-gssapi")
         _create_module("Network", networkReqs)
         _create_module("Sql", [])
         _create_module("Test", [])

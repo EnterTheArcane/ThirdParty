@@ -1,6 +1,7 @@
 from typing import Literal
 
 from thirdparty import RecipeBase, RecipeOptions
+from thirdparty.build import cross_building
 from thirdparty.cmake import CMake, CMakeToolchain
 from thirdparty.files import copy, get, rmdir, replace_in_file
 from thirdparty.scm import Version
@@ -25,6 +26,9 @@ class Recipe(RecipeBase[_Options]):
     def configure(self):
         if self.settings.arch in ["ARM"]:
             self.options.isa = "neon"
+        elif str(self.options.isa) == "native" and cross_building(self):
+            # A cross compiler cannot resolve -march=native; use a portable x86-64 SIMD baseline.
+            self.options.isa = "sse4.1"
 
     def requirements(self):
         self.requires_tool("cmake")
