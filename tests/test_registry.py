@@ -10,12 +10,12 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
-from thirdparty._internal.errors import AuthenticationException
+from thirdparty._internal.errors import AuthenticationException, NotFoundException
 from thirdparty._internal.pack.digest import oci_digest
 from thirdparty._internal.pack.layout import MT_INDEX
 from thirdparty._internal.pack.meta import PackageMeta
 from thirdparty._internal.pack.oci import OciBackend
-from thirdparty._internal.pack.registry import OciRegistryClient
+from thirdparty._internal.pack.registry import OciRegistryClient, parse_reference
 
 _BEARER_REALM = "https://auth.example.test/token"
 _DEFAULT_CHALLENGE = f'Bearer realm="{_BEARER_REALM}",service="example.test"'
@@ -25,6 +25,7 @@ class _FakeResponse:
     def __init__(self, status_code: int, *, content: bytes = b"",
                  json_body: "Any" = None, headers: "dict[str, str] | None" = None) -> None:
         self.status_code = status_code
+        self.ok = 200 <= status_code < 300
         self.content = content
         self._json = json_body
         self.headers = headers or {}
@@ -32,6 +33,13 @@ class _FakeResponse:
 
     def json(self) -> "Any":
         return self._json
+
+    def iter_content(self, chunk_size: int) -> "Any":
+        for i in range(0, len(self.content), chunk_size):
+            yield self.content[i:i + chunk_size]
+
+    def close(self) -> None:
+        pass
 
 
 class _FakeRegistry:
@@ -41,7 +49,9 @@ class _FakeRegistry:
         self.calls: list[tuple[str, str]] = []
         self.seen_auth: list[tuple[str, str | None]] = []   # (url, Authorization header)
         self.store: dict[str, bytes] = {}   # ref (tag or digest) -> manifest bytes
+        self.blobs: dict[str, bytes] = {}   # "sha256:<hex>" -> blob bytes
         self.tags: set[str] = set()
+        self.token_scopes: list[str] = []   # scope param of each /token exchange
         self.challenge = challenge          # None => /v2/ returns 200 (anonymous)
 
     def index(self, tag: str) -> "dict[str, Any] | None":
@@ -69,9 +79,14 @@ class _FakeRegistry:
                 return _FakeResponse(200, json_body={})
             return _FakeResponse(401, headers={"WWW-Authenticate": self.challenge})
         if url.endswith("/token"):
+            self.token_scopes.append((kwargs.get("params") or {}).get("scope", ""))
             return _FakeResponse(200, json_body={"token": "fake-bearer"})
         if url.endswith("/tags/list"):
             return _FakeResponse(200, json_body={"tags": sorted(self.tags)})
+        if "/blobs/" in url:
+            digest = url.split("/blobs/", 1)[1]
+            blob = self.blobs.get(digest)
+            return _FakeResponse(200, content=blob) if blob is not None else _FakeResponse(404)
         if "/manifests/" in url:
             ref = url.split("/manifests/", 1)[1]
             data = self.store.get(ref)
@@ -92,7 +107,10 @@ class _FakeRegistry:
 
     def put(self, url: str, **kwargs: Any) -> _FakeResponse:
         self._record("PUT", url, kwargs)
-        if "/manifests/" in url:
+        if "digest=" in url and "/blobs/uploads/" in url:  # monolithic blob upload
+            digest = url.split("digest=", 1)[1]
+            self.blobs[digest] = kwargs["data"]
+        elif "/manifests/" in url:
             ref = url.split("/manifests/", 1)[1]
             self.store[ref] = kwargs["data"]
             if not ref.startswith("sha256:"):
@@ -271,6 +289,100 @@ class CredentialResolutionTests(unittest.TestCase):
             with patch("netrc.netrc", side_effect=OSError):
                 creds = self._client("someregistry.io")._resolve_credentials()
         self.assertIsNone(creds)
+
+
+class ReferenceParsingTests(unittest.TestCase):
+    def test_full_uri_with_tag(self):
+        self.assertEqual(
+            parse_reference("ghcr.io/o3de/thirdparty/zlib:1.3.2"),
+            ("ghcr.io", "o3de/thirdparty/zlib", "1.3.2"))
+
+    def test_defaults_to_latest(self):
+        self.assertEqual(parse_reference("ghcr.io/o3de/zlib"), ("ghcr.io", "o3de/zlib", "latest"))
+
+    def test_digest_reference(self):
+        self.assertEqual(
+            parse_reference("host:5000/x/y@sha256:abc"), ("host:5000", "x/y", "sha256:abc"))
+
+    def test_no_registry_host_defaults_dockerhub(self):
+        self.assertEqual(parse_reference("library/img:1"), ("docker.io", "library/img", "1"))
+
+
+def _seed_multiarch(tmp: Path, reg: _FakeRegistry) -> None:
+    """Push windows+linux per-platform images and combine into a multi-arch 1.3.2 tag."""
+    with patch.dict("os.environ", {"GH_TOKEN": "t"}, clear=False):
+        client = _client(reg)
+        client.push_layout(
+            _layout(tmp, _meta("Windows", "X64", "windows-x64"), "win", payload=b"WINLIB"), "1.3.2")
+        client.push_layout(
+            _layout(tmp, _meta("Linux", "ARM", "linux-arm"), "lin", payload=b"LINLIB"), "1.3.2")
+        client.combine_index("1.3.2")
+
+
+class PullTests(unittest.TestCase):
+    def test_pull_extracts_selected_platform(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reg = _FakeRegistry()
+            _seed_multiarch(root, reg)
+            dest = root / "out"
+            with patch.dict("os.environ", {"GH_TOKEN": "t"}, clear=False):
+                info = _client(reg).pull_extract("1.3.2", dest, "windows/amd64")
+            self.assertEqual(info["platform"], "windows/amd64")
+            self.assertEqual((dest / "lib" / "z.lib").read_bytes(), b"WINLIB")
+            meta = json.loads((dest / ".thirdparty-oci.json").read_text())
+            self.assertEqual(meta["io.o3de.thirdparty.os"], "Windows")
+            self.assertEqual(meta["io.o3de.thirdparty.arch"], "X64")
+            self.assertEqual(meta["platform"], "windows/amd64")
+
+    def test_pull_other_platform_gets_its_own_payload(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reg = _FakeRegistry()
+            _seed_multiarch(root, reg)
+            dest = root / "out"
+            with patch.dict("os.environ", {"GH_TOKEN": "t"}, clear=False):
+                _client(reg).pull_extract("1.3.2", dest, "linux/arm64")
+            self.assertEqual((dest / "lib" / "z.lib").read_bytes(), b"LINLIB")
+
+    def test_pull_unknown_platform_lists_available(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reg = _FakeRegistry()
+            _seed_multiarch(root, reg)
+            with patch.dict("os.environ", {"GH_TOKEN": "t"}, clear=False):
+                with self.assertRaises(NotFoundException) as ctx:
+                    _client(reg).pull_extract("1.3.2", root / "out", "darwin/arm64")
+            msg = str(ctx.exception)
+            self.assertIn("linux/arm64", msg)
+            self.assertIn("windows/amd64", msg)
+
+    def test_pull_requests_pull_only_scope(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reg = _FakeRegistry()
+            _seed_multiarch(root, reg)
+            reg.token_scopes.clear()
+            with patch.dict("os.environ", {"GH_TOKEN": "t"}, clear=False):
+                _client(reg).pull_extract("1.3.2", root / "out", "windows/amd64")
+            self.assertTrue(reg.token_scopes)
+            self.assertTrue(all(s.endswith(":pull") for s in reg.token_scopes))
+
+    def test_anonymous_pull_needs_no_credentials(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            reg = _FakeRegistry()
+            _seed_multiarch(root, reg)
+            dest = root / "out"
+            reg.seen_auth.clear()
+            # No GH_TOKEN, no docker config, no netrc -> fully anonymous.
+            with patch.dict("os.environ", {}, clear=True):
+                with patch("netrc.netrc", side_effect=OSError):
+                    _client(reg).pull_extract("1.3.2", dest, "windows/amd64")
+            token_auth = [a for u, a in reg.seen_auth if u.startswith(_BEARER_REALM)]
+            self.assertTrue(token_auth)
+            self.assertTrue(all(a is None for a in token_auth))  # token fetched without Basic auth
+            self.assertEqual((dest / "lib" / "z.lib").read_bytes(), b"WINLIB")
 
 
 if __name__ == "__main__":

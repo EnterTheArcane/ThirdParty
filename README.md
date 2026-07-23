@@ -50,6 +50,14 @@ thirdparty oci push zlib --registry docker.io --owner myorg --username myorg --p
 #    at the end of the pipeline. Additive/idempotent upsert: rerun for just one os/arch and it
 #    refreshes that platform while preserving the rest. Needs only recipes/ + network (no build).
 thirdparty oci combine zlib --owner o3de
+
+# 4. Pull - download an image and extract it into a directory CMake consumers can use
+#    (CMAKE_PREFIX_PATH / find_package). --platform defaults to the current machine; it selects the
+#    matching entry from the multi-arch index. Public images pull anonymously (no credentials).
+#    The <image> is a full URI or a bare recipe name (composed with --registry/--owner/--prefix/--tag).
+thirdparty oci pull ghcr.io/o3de/thirdparty/zlib:1.3.2 --output ./zlib   # -> ./zlib/{include,lib,...}
+thirdparty oci pull ghcr.io/o3de/thirdparty/zlib:1.3.2 --platform linux/arm64 -o ./zlib
+thirdparty oci pull zlib --owner o3de --tag 1.3.2 --output ./zlib        # name mode
 ```
 
 Type checking:

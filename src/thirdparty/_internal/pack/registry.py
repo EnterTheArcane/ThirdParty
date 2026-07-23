@@ -27,9 +27,45 @@ _MANIFEST_ACCEPT = ", ".join([
     "application/vnd.docker.distribution.manifest.v2+json",
 ])
 
+# When pulling we accept indexes too, so the registry returns the multi-arch index verbatim
+# (we select the platform ourselves) rather than resolving a platform server-side.
+_PULL_ACCEPT = ", ".join([
+    MT_INDEX,
+    "application/vnd.docker.distribution.manifest.list.v2+json",
+    MT_MANIFEST,
+    "application/vnd.docker.distribution.manifest.v2+json",
+])
+
 # Docker Hub is addressed by several host spellings; its config.json key is a legacy URL.
 _DOCKERHUB_HOSTS = {"docker.io", "registry-1.docker.io", "index.docker.io"}
 _DOCKERHUB_CONFIG_KEY = "https://index.docker.io/v1/"
+
+# Multi-arch index media types (OCI + Docker manifest list).
+_INDEX_TYPES = {MT_INDEX, "application/vnd.docker.distribution.manifest.list.v2+json"}
+
+
+def parse_reference(uri: str) -> "tuple[str, str, str]":
+    """Split an OCI reference ``[registry/]repository[:tag|@digest]`` into (registry, repository, ref).
+
+    The first path segment is the registry host when it looks like one (contains ``.`` or ``:`` or is
+    ``localhost``); the trailing ``@sha256:…`` digest or ``:tag`` (after the last ``/``) is the ref,
+    defaulting to ``latest``.  E.g. ``ghcr.io/o3de/thirdparty/zlib:1.3.2`` ->
+    ``("ghcr.io", "o3de/thirdparty/zlib", "1.3.2")``."""
+    first, slash, rest = uri.partition("/")
+    if slash and ("." in first or ":" in first or first == "localhost"):
+        registry, remainder = first, rest
+    else:
+        registry, remainder = "docker.io", uri
+
+    if "@" in remainder:
+        repository, _, ref = remainder.partition("@")
+    else:
+        head, sep, tail = remainder.rpartition(":")
+        if sep and "/" not in tail:
+            repository, ref = head, tail
+        else:
+            repository, ref = remainder, "latest"
+    return registry, repository, ref
 
 
 def _noop_log(msg: str) -> None:
@@ -126,6 +162,7 @@ class OciRegistryClient:
         *,
         registry: str = "ghcr.io",
         prefix: str = "thirdparty",
+        repository: "str | None" = None,
         username: "str | None" = None,
         password: "str | None" = None,
         http: "Any | None" = None,
@@ -133,7 +170,8 @@ class OciRegistryClient:
         self.registry = registry
         self.owner = owner
         self.name = name
-        self.repo = f"{owner}/{prefix}/{name}" if prefix else f"{owner}/{name}"
+        # An explicit repository (from a full pull URI) wins; otherwise compose it from owner/prefix/name.
+        self.repo = repository or (f"{owner}/{prefix}/{name}" if prefix else f"{owner}/{name}")
         self._base = f"https://{registry}"
         self._username = username
         self._password = password
@@ -141,8 +179,12 @@ class OciRegistryClient:
         self._log: "Callable[[str], None]" = log if log is not None else _noop_log
         self._auth: "dict[str, str]" = {}
 
-    def authenticate(self) -> None:
-        """Discover and satisfy the registry's auth scheme via its ``/v2/`` challenge."""
+    def authenticate(self, actions: str = "pull,push") -> None:
+        """Discover and satisfy the registry's auth scheme via its ``/v2/`` challenge.
+
+        *actions* is the requested token scope (``pull`` for read-only pulls, ``pull,push`` for
+        publishing).  With no credentials a Bearer challenge still yields an anonymous token, so
+        public-image pulls work credential-free."""
         resp = self._http.get(f"{self._base}/v2/", headers={})
         code = int(resp.status_code)
         if 200 <= code < 300:
@@ -156,17 +198,20 @@ class OciRegistryClient:
                 f"{self.registry} requires auth but sent no supported WWW-Authenticate challenge")
         creds = self._resolve_credentials()
         if challenge.scheme == "bearer":
-            self._auth = {"Authorization": f"Bearer {self._fetch_bearer(challenge, creds)}"}
+            self._auth = {"Authorization": f"Bearer {self._fetch_bearer(challenge, creds, actions)}"}
         else:  # basic
             if creds is None:
                 raise AuthenticationException(
                     f"{self.registry} requires credentials (Basic auth); none found")
             self._auth = {"Authorization": _basic_header(creds)}
 
-    def _fetch_bearer(self, challenge: _Challenge, creds: "_Credentials | None") -> str:
-        params: dict[str, str] = {"scope": f"repository:{self.repo}:pull,push"}
+    def _fetch_bearer(
+        self, challenge: _Challenge, creds: "_Credentials | None", actions: str = "pull,push") -> str:
+        params: dict[str, str] = {"scope": f"repository:{self.repo}:{actions}"}
         if challenge.service:
             params["service"] = challenge.service
+        # No credentials -> no Authorization header -> the registry issues an anonymous token
+        # (public pulls). Credentials, when present, authorize a scoped (e.g. push-capable) token.
         headers = {"Authorization": _basic_header(creds)} if creds is not None else {}
         resp = self._http.get(challenge.realm, params=params, headers=headers)
         _raise_for_status(resp, "token exchange")
@@ -342,16 +387,93 @@ class OciRegistryClient:
             url, first = nxt, False
         return tags
 
-    def _get_manifest(self, reference: str) -> "tuple[bytes, str, dict[str, Any]]":
+    def _get_manifest(
+        self, reference: str, accept: str = _MANIFEST_ACCEPT) -> "tuple[bytes, str, dict[str, Any]]":
         """Fetch a manifest by tag/digest: returns (raw bytes, content digest, parsed doc)."""
         resp = self._http.get(
             f"{self._base}/v2/{self.repo}/manifests/{reference}",
-            headers={**self._auth, "Accept": _MANIFEST_ACCEPT})
+            headers={**self._auth, "Accept": accept})
         _raise_for_status(resp, f"manifest get {reference}")
         content: bytes = resp.content
         digest = resp.headers.get("Docker-Content-Digest") or oci_digest(content)
         doc = cast("dict[str, Any]", json.loads(content))
         return content, digest, doc
+
+    def _download_blob(self, digest: str, dest_path: Path) -> None:
+        """Stream a blob to *dest_path* (must not pre-exist) and verify its sha256 digest."""
+        from thirdparty._internal.util.file_downloader import FileDownloader
+        url = f"{self._base}/v2/{self.repo}/blobs/{digest}"
+        hex_digest = digest.split(":", 1)[1] if ":" in digest else digest
+        FileDownloader(self._http, scope="oci-pull").download(
+            url, str(dest_path.resolve()), headers=dict(self._auth), sha256=hex_digest)
+
+    def resolve_platform_manifest(
+        self, reference: str, want_platform: str) -> "tuple[dict[str, Any], str]":
+        """Resolve *reference* to a single image manifest for *want_platform* (``os/arch``).
+
+        If the reference is a multi-arch index, select the entry whose OCI platform matches; raise
+        :class:`NotFoundException` (listing available platforms) if none do.  A plain image manifest
+        is returned as-is.  Returns (image-manifest doc, its digest)."""
+        _content, digest, doc = self._get_manifest(reference, accept=_PULL_ACCEPT)
+        is_index = doc.get("mediaType") in _INDEX_TYPES or (
+            "manifests" in doc and "layers" not in doc)
+        if not is_index:
+            return doc, digest
+
+        want_os, _, want_arch = want_platform.partition("/")
+        available: list[str] = []
+        for entry in cast("list[dict[str, Any]]", doc.get("manifests") or []):
+            plat = cast("dict[str, Any]", entry.get("platform") or {})
+            available.append(f"{plat.get('os')}/{plat.get('architecture')}")
+            if plat.get("os") == want_os and plat.get("architecture") == want_arch:
+                _c, mdigest, mdoc = self._get_manifest(entry["digest"], accept=_PULL_ACCEPT)
+                return mdoc, mdigest
+        raise NotFoundException(
+            f"{self.repo}: no image for platform '{want_platform}'; "
+            f"available: {', '.join(sorted(set(available))) or 'none'}")
+
+    def pull_extract(
+        self, reference: str, dest: Path, want_platform: str, *,
+        dry_run: bool = False) -> "dict[str, Any]":
+        """Pull *reference* for *want_platform* and extract its layer(s) into *dest*.
+
+        Anonymous-capable (public images need no credentials).  Extraction uses the safe ``data``
+        tar filter.  Writes a ``.thirdparty-oci.json`` sidecar with the os/arch/version annotations
+        for the package system.  Returns {platform, digest, layers}."""
+        import tempfile
+        from thirdparty.files.files import untargz
+
+        self.authenticate("pull")
+        doc, digest = self.resolve_platform_manifest(reference, want_platform)
+        layers = cast("list[dict[str, Any]]", doc.get("layers") or [])
+        result: dict[str, Any] = {
+            "platform": want_platform, "digest": digest,
+            "layers": [str(layer["digest"]) for layer in layers]}
+
+        if dry_run:
+            self._log(f"[dry-run] would pull {self.registry}/{self.repo}@{digest} ({want_platform})")
+            for layer in layers:
+                self._log(f"[dry-run]   download + extract layer {layer['digest']}")
+            return result
+
+        dest.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory() as tmp:
+            for i, layer in enumerate(layers):
+                blob_path = Path(tmp) / f"layer{i}"
+                self._download_blob(str(layer["digest"]), blob_path)
+                untargz(str(blob_path), dest, extract_filter="data")
+                self._log(f"  extracted layer {str(layer['digest'])[:19]} -> {dest}")
+        self._write_pull_metadata(dest, doc, digest, want_platform)
+        return result
+
+    def _write_pull_metadata(
+        self, dest: Path, doc: "dict[str, Any]", digest: str, want_platform: str) -> None:
+        ann = cast("dict[str, Any]", doc.get("annotations") or {})
+        meta = {k: v for k, v in ann.items() if k.startswith("io.o3de.thirdparty.")}
+        meta["platform"] = want_platform
+        meta["manifest_digest"] = digest
+        (dest / ".thirdparty-oci.json").write_text(
+            json.dumps(meta, indent=2, sort_keys=True), encoding="utf-8")
 
     def platform_tag(self, tag: str, platform: "dict[str, Any]") -> str:
         """Per-platform tag, e.g. ``1.3.2-android-arm64`` - a stable, collision-free handle
