@@ -15,23 +15,41 @@ thirdparty list
 thirdparty build
 ```
 
-Packaging:
-```bash
-# Turn a built/staged package into a distributable artifact. Backends:
-#   oci (default) - a single-layer OCI image written as an on-disk image layout
-#                   (blobs + index.json), no Docker/daemon required
-#   tar.gz / zip  - a plain archive plus a metadata.json sidecar
-thirdparty package zlib                      # -> build/zlib/<package_id>/dist/oci/
-thirdparty package zlib --format tar.gz      # -> build/zlib/<package_id>/dist/zlib-<ver>-<id>.tar.gz
-thirdparty package "*"                        # package every built recipe
+Packaging: `oci` (OCI images) and `archive` (plain archives) consume the *already-built* staged
+package under `build/<name>/<package_id>/package/`. They never run a recipe build - if the package
+isn't built yet, they fail (run `thirdparty build <name>` first).
 
-# Publish the OCI image to a container registry (GHCR) as ghcr.io/<owner>/<prefix>/<name>:<version>.
-# Repeated per-platform publishes accrete into one multi-arch index tag, so consumers pull one
-# tag and the registry resolves their os/arch (Homebrew-bottle style). Needs GH_TOKEN or
-# GITHUB_TOKEN with packages:write.
-export GH_TOKEN=...                            # or GITHUB_TOKEN
-thirdparty publish zlib --owner o3de --dry-run # print the planned registry calls
-thirdparty publish zlib --owner o3de           # push (owner defaults to $GITHUB_REPOSITORY_OWNER)
+Archives:
+```bash
+# A single compressed archive + a metadata.json sidecar. --format: tar, tar.gz (default),
+# tar.bz2, tar.xz, zip.
+thirdparty archive zlib                    # -> build/zlib/<id>/dist/zlib-<ver>-<id>.tar.gz
+thirdparty archive zlib --format zip
+thirdparty archive "*" --format tar.xz     # every built recipe
+```
+
+OCI images:
+```bash
+# 1. Build the OCI image as an on-disk image layout (blobs + index.json), single layer,
+#    no Docker/daemon required.
+thirdparty oci build zlib                   # -> build/zlib/<id>/dist/oci/
+
+# 2. Push a BUILT layout to any OCI registry as <registry>/<owner>/<prefix>/<name> (--registry
+#    default ghcr.io; also docker.io, quay.io, GitLab, Harbor, self-hosted registry:2). Fails if
+#    'oci build' hasn't run. Always writes only a per-platform tag <version>-<os>-<arch>, never
+#    the shared multi-arch tag, so a parallel CI matrix never races. Run on each matrix runner.
+#    Auth is discovered from the registry's WWW-Authenticate challenge (Bearer or Basic);
+#    credentials, first match wins: --username/--password -> GH_TOKEN/GITHUB_TOKEN (ghcr.io) ->
+#    REGISTRY_USERNAME + REGISTRY_PASSWORD/REGISTRY_TOKEN -> ~/.docker/config.json -> ~/.netrc.
+export GH_TOKEN=...                         # ghcr.io default; or `docker login <registry>`
+thirdparty oci push zlib --owner o3de
+thirdparty oci push zlib --registry docker.io --owner myorg --username myorg --password "$PAT"
+
+# 3. Combine - (re)assembles the multi-arch <version> tag from every per-platform tag now in the
+#    registry, so consumers pull one tag and get their os/arch (Homebrew-bottle style). Run once
+#    at the end of the pipeline. Additive/idempotent upsert: rerun for just one os/arch and it
+#    refreshes that platform while preserving the rest. Needs only recipes/ + network (no build).
+thirdparty oci combine zlib --owner o3de
 ```
 
 Type checking:

@@ -5,7 +5,6 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from thirdparty._internal.pack.backend import register
 from thirdparty._internal.pack.digest import oci_digest
 from thirdparty._internal.pack.layout import (
     MT_CONFIG,
@@ -131,6 +130,3 @@ class OciBackend:
         (out_dir / "oci-layout").write_bytes(
             canonical_json({"imageLayoutVersion": OCI_LAYOUT_VERSION}))
         return out_dir
-
-
-register(OciBackend())

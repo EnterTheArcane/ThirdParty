@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import bz2
 import gzip
+import lzma
 import os
 import zipfile
 from pathlib import Path
@@ -22,19 +24,38 @@ def _sidecar(meta: PackageMeta) -> bytes:
     return canonical_json(meta.to_json())
 
 
-class TarGzBackend:
-    """A ``<name>-<version>-<package_id>.tar.gz`` with a top-level ``metadata.json`` sidecar.
+def _compress(data: bytes, compression: str) -> bytes:
+    """Deterministically compress the tar bytes for the given tar sub-format.
+
+    gzip forces ``mtime=0`` (otherwise it stamps the current time); bz2/lzma embed no
+    timestamp, so all variants are reproducible."""
+    if compression == "":
+        return data
+    if compression == "gz":
+        return gzip.compress(data, compresslevel=6, mtime=0)
+    if compression == "bz2":
+        return bz2.compress(data, compresslevel=9)
+    if compression == "xz":
+        return lzma.compress(data, preset=6)
+    raise ValueError(f"unknown tar compression '{compression}'")
+
+
+class TarBackend:
+    """A ``<name>-<version>-<package_id>.tar[.<comp>]`` with a ``metadata.json`` sidecar.
 
     Reuses the deterministic tar builder (sorted entries, zeroed mtime/uid/gid, symlinks
-    preserved), then gzips with ``mtime=0`` so the artifact is reproducible."""
+    preserved), then compresses reproducibly.  ``compression`` is ``""`` (plain tar), ``"gz"``,
+    ``"bz2"`` or ``"xz"``."""
 
-    name = "tar.gz"
+    def __init__(self, compression: str) -> None:
+        self.compression = compression
+        self.name = "tar" if compression == "" else f"tar.{compression}"
 
     def pack(self, staged_dir: Path, out_dir: Path, meta: PackageMeta) -> Path:
         out_dir.mkdir(parents=True, exist_ok=True)
         tar_bytes = build_deterministic_tar(staged_dir, extra={_METADATA_NAME: _sidecar(meta)})
-        target = out_dir / f"{_artifact_stem(meta)}.tar.gz"
-        target.write_bytes(gzip.compress(tar_bytes, compresslevel=6, mtime=0))
+        target = out_dir / f"{_artifact_stem(meta)}.{self.name}"
+        target.write_bytes(_compress(tar_bytes, self.compression))
         return target
 
 
@@ -83,5 +104,8 @@ def _sorted_files(root: Path) -> "list[tuple[str, str]]":
     return out
 
 
-register(TarGzBackend())
+register(TarBackend(""))
+register(TarBackend("gz"))
+register(TarBackend("bz2"))
+register(TarBackend("xz"))
 register(ZipBackend())
