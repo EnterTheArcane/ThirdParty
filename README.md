@@ -15,6 +15,25 @@ thirdparty list
 thirdparty build
 ```
 
+Packaging:
+```bash
+# Turn a built/staged package into a distributable artifact. Backends:
+#   oci (default) - a single-layer OCI image written as an on-disk image layout
+#                   (blobs + index.json), no Docker/daemon required
+#   tar.gz / zip  - a plain archive plus a metadata.json sidecar
+thirdparty package zlib                      # -> build/zlib/<package_id>/dist/oci/
+thirdparty package zlib --format tar.gz      # -> build/zlib/<package_id>/dist/zlib-<ver>-<id>.tar.gz
+thirdparty package "*"                        # package every built recipe
+
+# Publish the OCI image to a container registry (GHCR) as ghcr.io/<owner>/<prefix>/<name>:<version>.
+# Repeated per-platform publishes accrete into one multi-arch index tag, so consumers pull one
+# tag and the registry resolves their os/arch (Homebrew-bottle style). Needs GH_TOKEN or
+# GITHUB_TOKEN with packages:write.
+export GH_TOKEN=...                            # or GITHUB_TOKEN
+thirdparty publish zlib --owner o3de --dry-run # print the planned registry calls
+thirdparty publish zlib --owner o3de           # push (owner defaults to $GITHUB_REPOSITORY_OWNER)
+```
+
 Type checking:
 ```bash
 pyright
