@@ -253,7 +253,7 @@ def _build_dep_graph(
             conf.tools.cmake.configure_args.append("-DCMAKE_POLICY_DEFAULT_CMP0092=NEW")
             # Silence CMake's "unused manually-specified variable CMAKE_POLICY_DEFAULT_CMP0092"
             # for projects whose cmake_minimum_required is already >= 3.15 (CMP0092 defaults NEW).
-            conf.tools.cmake.configure_args.append("--no-warn-unused-cli")
+            conf.tools.cmake.configure_args.append("-Wno-unused-cli")
         # Quiet by default (small CI logs); `build --verbose` restores full build-tool output
         # and compiler warnings. "-w" is safe on MSVC too: CMP0092=NEW drops the default /W3.
         conf.tools.build.verbose = verbose

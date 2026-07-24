@@ -188,7 +188,7 @@ def make_probe_recipe(
         # Projects whose cmake_minimum_required is already >= 3.15 default CMP0092 to NEW without
         # consulting the -D above, so CMake reports it as an unused manually-specified variable.
         # Suppress that (and any other unused framework-injected -D) cosmetic warning.
-        conf.tools.cmake.configure_args.append("--no-warn-unused-cli")
+        conf.tools.cmake.configure_args.append("-Wno-unused-cli")
     # Quiet by default so CI logs stay small (only the compiled file + errors); `build
     # --verbose` restores full build-tool output and compiler warnings.
     conf.tools.build.verbose = verbose
