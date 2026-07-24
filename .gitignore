@@ -1,5 +1,7 @@
 /build/
 /external/
+temp/
+tmp/
 *.log
 .idea/
 
