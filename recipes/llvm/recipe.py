@@ -59,6 +59,9 @@ class Recipe(RecipeBase):
                 copy(self, "*", src=src, dst=dst)
 
     def package_info(self):
+        # Empty libdirs keeps the bundled libc++ off the dynamic loader path, where other
+        # tools running under the same env (ninja, cmake) would load it and crash.
+        self.info.libdirs = []
         bin_dir = self.folders.package / "bin"
         self.info.buildenv.prepend_path("PATH", bin_dir)
         self.info.buildenv.define_path("LLVM_DIR", self.folders.package)

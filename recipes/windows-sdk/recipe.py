@@ -1,5 +1,6 @@
 from thirdparty import RecipeBase
 from thirdparty.files import copy, get, save
+from thirdparty.microsoft import add_case_variant_symlinks
 from thirdparty.scm import NugetPackage, Version
 
 
@@ -62,6 +63,11 @@ class Recipe(RecipeBase):
             "(c) Microsoft Corporation. All rights reserved.\n"
             "Licensed under the Microsoft Software License Terms for the Windows SDK.\n"
             "https://aka.ms/WinSDKLicenseURL\n")
+
+        add_case_variant_symlinks(
+            self,
+            include_dirs=[pkg / "include" / s for s in _INCLUDE_SUBDIRS],
+            lib_dirs=[pkg / "lib" / api / arch for api in _LIB_APIS])
 
     def package_info(self) -> None:
         root = self.folders.package

@@ -151,6 +151,13 @@ def detect_settings(build_type: str = "Release", target_os: str | None = None, t
             settings.compiler_version = msvc_ver
             settings.compiler_runtime = "dynamic"
             settings.compiler_cxx_standard = "17"
+    elif the_os == "Windows":
+        # Cross-compiling for Windows: clang-cl from the llvm package, MSVC ABI. The
+        # runtime matches native detection so packages stay interchangeable. No version:
+        # the compiler comes from the llvm recipe, whose version this must not duplicate.
+        settings.compiler = "clang"
+        settings.compiler_runtime = "dynamic"
+        settings.compiler_cxx_standard = "17"
     elif machine_os == "Mac":
         ver = _detect_apple_clang_version()
         if ver:

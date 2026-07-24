@@ -619,7 +619,9 @@ class EnvVars:
                 value = value.replace(sep + placeholder, f"${{{varname}:+{sep}${varname}}}", 1)
             elif (placeholder + sep) in value:
                 value = value.replace(placeholder + sep, f"${{{varname}:-}}${{{varname}:+{sep}}}", 1)
-            value = value.replace('"', '\\"')
+            # Backslashes first (quote-escaping introduces backslashes); a value ending in
+            # '\' (e.g. WindowsSDKVersion) would otherwise escape the closing quote.
+            value = value.replace("\\", "\\\\").replace('"', '\\"')
             if generate_deactivate and self._deactivation_mode == "function":
                 # Check environment variable existence before saving value
                 result.append(

@@ -16,6 +16,7 @@ from thirdparty.cmake.toolchain.blocks import (
     WarningFilterBlock,
     UserToolchain,
     GenericSystemBlock,
+    LLVMWindowsCrossBlock,
     AndroidSystemBlock,
     AppleSystemBlock,
     FPicBlock,
@@ -139,6 +140,7 @@ class CMakeToolchain:
             self._recipe, self, [
                 ("user_toolchain", UserToolchain),
                 ("generic_system", GenericSystemBlock),
+                ("llvm_win_cross", LLVMWindowsCrossBlock),
                 ("warning_filter", WarningFilterBlock),
                 ("compilers", CompilersBlock),
                 ("android_system", AndroidSystemBlock),

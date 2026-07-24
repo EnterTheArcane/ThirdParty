@@ -966,6 +966,64 @@ class CompilersBlock(Block):
         return {"compilers": compilers}
 
 
+class LLVMWindowsCrossBlock(Block):
+    """Cross-compiling for Windows with clang-cl & co from the llvm tool package.
+
+    The windows-sdk/msvc dirs are passed as explicit /imsvc and /libpath: flags rather
+    than via INCLUDE/LIB, which clang-cl and lld-link split on ';' even on POSIX hosts.
+    """
+    template = textwrap.dedent(
+        """
+        # Cross-compiling for Windows with LLVM clang-cl (MSVC ABI)
+        set(CMAKE_C_COMPILER "{{ bin }}/clang-cl")
+        set(CMAKE_CXX_COMPILER "{{ bin }}/clang-cl")
+        set(CMAKE_RC_COMPILER "{{ bin }}/llvm-rc")
+        set(CMAKE_LINKER "{{ bin }}/lld-link")
+        set(CMAKE_AR "{{ bin }}/llvm-lib")
+        set(CMAKE_MT "{{ bin }}/llvm-mt")
+        set(CMAKE_C_COMPILER_TARGET {{ triple }})
+        set(CMAKE_CXX_COMPILER_TARGET {{ triple }})
+        {% for d in include_dirs %}
+        string(APPEND RECIPE_C_FLAGS " \\"/imsvc{{ d }}\\"")
+        string(APPEND RECIPE_CXX_FLAGS " \\"/imsvc{{ d }}\\"")
+        string(APPEND RECIPE_RC_FLAGS " /I \\"{{ d }}\\"")
+        {% endfor %}
+        {% for d in lib_dirs %}
+        string(APPEND RECIPE_EXE_LINKER_FLAGS " \\"/libpath:{{ d }}\\"")
+        string(APPEND RECIPE_SHARED_LINKER_FLAGS " \\"/libpath:{{ d }}\\"")
+        {% endfor %}
+        """)
+
+    def context(self) -> dict[str, Any] | None:
+        settings = self._recipe.settings
+        if settings.os != "Windows" or settings.compiler != "clang":
+            return None
+        if self._recipe.settings_build.os == "Windows":
+            return None
+
+        llvm_dir = self._recipe.conf.tools.llvm.dir
+        if llvm_dir is None:
+            raise RecipeException(
+                "Cross-building for Windows needs clang-cl from the 'llvm' tool package, "
+                "but conf.tools.llvm.dir is not set (missing requires_tool('llvm')?)")
+        triple = {"X64": "x86_64", "ARM": "aarch64"}[str(settings.arch)] + "-pc-windows-msvc"
+
+        # msvc dirs before windows-sdk ones, mirroring vcvars' INCLUDE order.
+        dirs_by_name: dict[str, tuple[list[str], list[str]]] = {}
+        for dep in self._recipe.dependencies.host.values():
+            if str(dep.name) in ("msvc", "windows-sdk"):
+                dirs_by_name[str(dep.name)] = (list(dep.info.includedirs), list(dep.info.libdirs))
+        include_dirs = [d for name in ("msvc", "windows-sdk") for d in dirs_by_name.get(name, ([], []))[0]]
+        lib_dirs = [d for name in ("msvc", "windows-sdk") for d in dirs_by_name.get(name, ([], []))[1]]
+
+        return {
+            "bin": (os.fspath(llvm_dir) + "/bin").replace("\\", "/"),
+            "triple": triple,
+            "include_dirs": [str(d).replace("\\", "/") for d in include_dirs],
+            "lib_dirs": [str(d).replace("\\", "/") for d in lib_dirs],
+        }
+
+
 class GenericSystemBlock(Block):
     template = textwrap.dedent(
         """
