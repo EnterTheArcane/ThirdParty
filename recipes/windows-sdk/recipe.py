@@ -8,10 +8,10 @@ from thirdparty.scm import NugetPackage, Version
 # lowercase here (they double as the download filename). Both arch lib packages are listed, but a
 # build only pulls the one matching the target arch.
 _SHA256 = {
-    "microsoft.windows.sdk.buildtools": "d939fa052f9c80f878b2a28b7071a6f2c9a51029018bb87a835ebda6e535a002",
-    "microsoft.windows.sdk.cpp.arm64": "543c2b31dfa77e00cc63860a587178c5c90837f64c05b05f73cb18b1c33f549a",
-    "microsoft.windows.sdk.cpp.x64": "72076d00b16c3882bf9eab0c80e350f33d8bc65e5f29e2f0e9b66a3f2569ccb1",
-    "microsoft.windows.sdk.cpp": "0a4887a64d1b17128f9ffd80032f20debabf943f34eea927aac00cc46cb32879",
+    "microsoft.windows.sdk.buildtools": "a09a4c9d68160ced4765137a9a7444ea560ea86c45d6a77093dea58c2f7563a0",
+    "microsoft.windows.sdk.cpp.arm64": "f890c85f46cc76c094f30fa555a438a212ee3d36165bcd7afdca96bb52c9bc7a",
+    "microsoft.windows.sdk.cpp.x64": "a9cae2a8c5da7f5dc5838ae6a76d06d0d2e2fdc3d8cfc69ca6c184e4b9193a00",
+    "microsoft.windows.sdk.cpp": "be1b419491607eae6f7c57844ebab39face9643c51e2af1d9176a3ba0d0b23fc",
 }
 
 _ARCH = {"X64": "x64", "ARM": "arm64"}
@@ -21,7 +21,7 @@ _LIB_APIS = ("ucrt", "um")
 
 class Recipe(RecipeBase):
     name = "windows-sdk"
-    version = "10.0.28000.2270"
+    version = "10.0.28000.2526"
     sdk_version = "10.0.28000.0"
     nuget_version = version
     license = "Microsoft Windows SDK License"

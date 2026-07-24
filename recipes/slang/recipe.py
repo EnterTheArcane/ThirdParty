@@ -13,7 +13,7 @@ class _Options(RecipeOptions):
 
 class Recipe(RecipeBase[_Options]):
     name = "slang"
-    version = "2026.13.1"
+    version = "2026.14"
     license = "Apache-2.0", "MIT"
 
     def latest_version(self):
@@ -37,7 +37,7 @@ class Recipe(RecipeBase[_Options]):
         get(
             self,
             url=f"https://github.com/shader-slang/slang/archive/refs/tags/v{self.version}.tar.gz",
-            sha256="2d112770f4af5459b0963473237523c4b1295ebe5627aa043c48cd3c8531158e",
+            sha256="6782f3bc48864fa179d1fb875a172b9c53cb0fd768a3241ff470fb1ccaca97ec",
             destination=self.folders.source,
             strip_root=True)
         get(
@@ -96,6 +96,7 @@ class Recipe(RecipeBase[_Options]):
         cmake = CMake(self)
         cmake.configure()
         cmake.build()
+        cmake.build(target="all-generators")
 
     def package(self):
         cmake = CMake(self)

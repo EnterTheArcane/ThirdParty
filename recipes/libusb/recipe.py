@@ -14,7 +14,7 @@ class _Options(RecipeOptions):
 
 class Recipe(RecipeBase[_Options]):
     name = "libusb"
-    version = "1.0.27"
+    version = "1.0.30"
     license = "LGPL-2.1-or-later"
 
     def latest_version(self):
@@ -37,7 +37,7 @@ class Recipe(RecipeBase[_Options]):
         get(
             self,
             url=f"https://github.com/libusb/libusb/releases/download/v{self.version}/libusb-{self.version}.tar.bz2",
-            sha256="ffaa41d741a8a3bee244ac8e54a72ea05bf2879663c098c82fc5757853441575",
+            sha256="fea36f34f9156400209595e300840767ab1a385ede1dc7ee893015aea9c6dbaf",
             destination=self.folders.source,
             strip_root=True)
 

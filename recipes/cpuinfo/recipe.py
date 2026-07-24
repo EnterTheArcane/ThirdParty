@@ -12,7 +12,7 @@ class _Options(RecipeOptions):
 
 class Recipe(RecipeBase[_Options]):
     name = "cpuinfo"
-    version = "20260716"
+    version = "20260723"
     license = "BSD-2-Clause"
 
     def latest_version(self):
@@ -32,8 +32,8 @@ class Recipe(RecipeBase[_Options]):
     def source(self):
         get(
             self,
-            url="https://github.com/pytorch/cpuinfo/archive/6882af581bbbdd073c946eae4fd21bc037ff39cf.tar.gz",
-            sha256="7e52f540ed50714ca540d3c82e4275c5166f80f09e4ab99f3edbf7f101aab716",
+            url="https://github.com/pytorch/cpuinfo/archive/d6108819d1d41c749b076e250be454c4559cb771.tar.gz",
+            sha256="f02b97e81049d7a0c46c349521a1b16c908abefe0ec7a411dcfbc970afb2a10d",
             destination=self.folders.source,
             strip_root=True)
         replace_in_file(

@@ -13,7 +13,7 @@ class _Options(RecipeOptions):
 
 class Recipe(RecipeBase[_Options]):
     name = "lerc"
-    version = "4.1.1"
+    version = "4.2.0"
     license = "Apache-2.0"
 
     def latest_version(self):
@@ -27,7 +27,7 @@ class Recipe(RecipeBase[_Options]):
         get(
             self,
             url=f"https://github.com/Esri/lerc/archive/refs/tags/v{self.version}.tar.gz",
-            sha256="fe2860e10635166cd9f2144e429ec6b870d471e9957f5812ba2da0973770b022",
+            sha256="a1fb593ed1fcb5b38800caf3c4454f872745202e961d00d745e53d81447e17c9",
             destination=self.folders.source,
             strip_root=True)
 
