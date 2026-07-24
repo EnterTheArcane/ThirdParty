@@ -6,7 +6,7 @@ from typing import Any
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.apple import is_apple_os
 from thirdparty.cmake import CMake, CMakeToolchain
-from thirdparty.files import copy, get, load, rmdir, save
+from thirdparty.files import copy, get, load, replace_in_file, rmdir, save
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -35,6 +35,12 @@ class Recipe(RecipeBase[_Options]):
             sha256="6e1aee535473414164bf83e4ebc40240dec71a4701f8a642d906e95bea1aea0c",
             destination=self.folders.source,
             strip_root=True)
+        # GCC 15 forbids including <bmi2intrin.h> directly
+        replace_in_file(
+            self,
+            self.folders.source / "absl" / "container" / "internal" / "raw_hash_set.h",
+            "#include <bmi2intrin.h>",
+            "#include <immintrin.h>")
 
     def generate(self):
         tc = CMakeToolchain(self)
