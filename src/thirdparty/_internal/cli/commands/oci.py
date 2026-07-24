@@ -254,4 +254,5 @@ def _require_owner(args: argparse.Namespace) -> str:
         print("[thirdparty] error: --owner (or GITHUB_REPOSITORY_OWNER) is required",
               file=sys.stderr)
         sys.exit(1)
-    return owner or "o3de"  # dry-run placeholder so the planned repo path is illustrative
+    # Match OciRegistryClient's normalization so the printed target path is the one pushed to.
+    return (owner or "o3de").lower()  # dry-run placeholder so the planned repo path is illustrative

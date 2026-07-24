@@ -306,6 +306,21 @@ class CredentialResolutionTests(unittest.TestCase):
         self.assertIsNone(creds)
 
 
+class OwnerNormalizationTests(unittest.TestCase):
+    def test_mixed_case_owner_lowercased_in_repo(self):
+        # A GitHub owner from $GITHUB_REPOSITORY_OWNER may be mixed-case; GHCR paths must be lowercase.
+        client = OciRegistryClient("EnterTheArcane", "zlib", http=_FakeRegistry())
+        self.assertEqual(client.owner, "enterthearcane")
+        self.assertEqual(client.repo, "enterthearcane/thirdparty/zlib")
+
+    def test_mixed_case_owner_lowercased_in_ghcr_username(self):
+        client = OciRegistryClient("EnterTheArcane", "zlib", http=_FakeRegistry())
+        with patch.dict("os.environ", {"GH_TOKEN": "envtok"}, clear=True):
+            creds = client._resolve_credentials()
+        assert creds is not None
+        self.assertEqual((creds.username, creds.secret), ("enterthearcane", "envtok"))
+
+
 class ReferenceParsingTests(unittest.TestCase):
     def test_full_uri_with_tag(self):
         self.assertEqual(

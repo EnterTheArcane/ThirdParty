@@ -36,6 +36,15 @@ on:
         type: boolean
         required: false
         default: true
+      publish:
+        description: Publish OCI Images
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   linux-arm:
@@ -44,6 +53,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-linux.yml
     with:
       arch: ARM
+      publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   linux-x64:
     name: Linux-X64
@@ -51,6 +61,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-linux.yml
     with:
       arch: X64
+      publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   mac-arm:
     name: Mac-ARM
@@ -58,6 +69,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-mac.yml
     with:
       arch: ARM
+      publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   mac-x64:
     name: Mac-X64
@@ -65,6 +77,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-mac.yml
     with:
       arch: X64
+      publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   windows-arm:
     name: Windows-ARM
@@ -72,6 +85,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-windows.yml
     with:
       arch: ARM
+      publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   windows-x64:
     name: Windows-X64
@@ -79,3 +93,30 @@ jobs:
     uses: ./.github/workflows/thirdparty-windows.yml
     with:
       arch: X64
+      publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
+
+  combine:
+    name: Combine
+    needs: [linux-arm, linux-x64, mac-arm, mac-x64, windows-arm, windows-x64]
+    if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.publish }}
+    runs-on: ubuntu-26.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          show-progress: false
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Pip Install
+        run: python -m pip install -e "."
+
+      - name: Combine multi-arch tags
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: thirdparty oci combine "*"

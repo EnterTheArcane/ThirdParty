@@ -168,6 +168,9 @@ class OciRegistryClient:
         http: "Any | None" = None,
         log: "Callable[[str], None] | None" = None) -> None:
         self.registry = registry
+        # OCI/GHCR repository paths must be lowercase, but a GitHub owner may be mixed-case
+        # (e.g. from $GITHUB_REPOSITORY_OWNER); normalize once so the repo path and auth agree.
+        owner = owner.lower()
         self.owner = owner
         self.name = name
         # An explicit repository (from a full pull URI) wins; otherwise compose it from owner/prefix/name.

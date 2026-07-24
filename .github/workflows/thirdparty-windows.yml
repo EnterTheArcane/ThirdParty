@@ -6,6 +6,10 @@ on:
       arch:
         required: true
         type: string
+      publish:
+        required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       arch:
@@ -16,8 +20,17 @@ on:
           - ARM
           - X64
         default: X64
+      publish:
+        description: Publish OCI images to GHCR
+        required: false
+        type: boolean
+        default: false
 
 run-name: Windows ${{ inputs.arch }}
+
+permissions:
+  contents: read
+  packages: write
 
 jobs:
   build:
@@ -46,4 +59,18 @@ jobs:
         timeout-minutes: 330
         run: >-
           thirdparty build
+          --target-arch ${{ inputs.arch }}
+
+      - name: Package OCI images
+        if: ${{ !cancelled() && inputs.publish }}
+        run: >-
+          thirdparty oci build "*"
+          --target-arch ${{ inputs.arch }}
+
+      - name: Push OCI images
+        if: ${{ !cancelled() && inputs.publish }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: >-
+          thirdparty oci push "*"
           --target-arch ${{ inputs.arch }}
