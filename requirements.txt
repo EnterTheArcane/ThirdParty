@@ -1,4 +1,5 @@
 colorama>=0.4
+comtypes>=1.4 ; sys_platform == "win32"
 fasteners>=0.15
 jinja2>=3.0
 packaging>=24.0

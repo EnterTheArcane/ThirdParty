@@ -361,8 +361,8 @@ class PullTests(unittest.TestCase):
             self.assertEqual(info["platform"], "windows/amd64")
             self.assertEqual((dest / "lib" / "z.lib").read_bytes(), b"WINLIB")
             meta = json.loads((dest / ".thirdparty-oci.json").read_text())
-            self.assertEqual(meta["io.o3de.thirdparty.os"], "Windows")
-            self.assertEqual(meta["io.o3de.thirdparty.arch"], "X64")
+            self.assertEqual(meta["thirdparty.os"], "Windows")
+            self.assertEqual(meta["thirdparty.arch"], "X64")
             self.assertEqual(meta["platform"], "windows/amd64")
 
     def test_pull_other_platform_gets_its_own_payload(self):

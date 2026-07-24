@@ -112,10 +112,10 @@ class OciBuildTests(unittest.TestCase):
             self.assertNotEqual(config["rootfs"]["diff_ids"][0], manifest["layers"][0]["digest"])
 
             ann = manifest["annotations"]
-            self.assertEqual(ann["io.o3de.thirdparty.package_id"], package_id)
-            self.assertIn("io.o3de.thirdparty.os", ann)
-            self.assertIn("io.o3de.thirdparty.arch", ann)
-            self.assertEqual(ann["io.o3de.thirdparty.build_type"], "Release")
+            self.assertEqual(ann["thirdparty.package_id"], package_id)
+            self.assertIn("thirdparty.os", ann)
+            self.assertIn("thirdparty.arch", ann)
+            self.assertEqual(ann["thirdparty.build_type"], "Release")
 
     def test_build_is_deterministic(self):
         with tempfile.TemporaryDirectory() as tmp:

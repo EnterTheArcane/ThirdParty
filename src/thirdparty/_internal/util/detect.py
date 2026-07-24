@@ -10,17 +10,18 @@ from thirdparty._internal.model.settings import Settings
 
 @lru_cache(maxsize=1)
 def _detect_msvc_version():
-    vswhere = os.path.join(
-        os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)"), "Microsoft Visual Studio", "Installer", "vswhere.exe", )
-    if not os.path.exists(vswhere):
+    if platform.system() != "Windows":
         return None
     try:
-        install_path = subprocess.check_output(
-            [
-                vswhere, "-latest", "-requires", "Microsoft.VisualStudio.Component.VC.Tools.x86.x64", "-property", "installationPath",
-            ], text=True, stderr=subprocess.DEVNULL, ).strip()
-        if not install_path:
+        from thirdparty._internal.util.setupconfiguration import vs_instances, VsSetupInstance
+        vc_tools = "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
+        candidates = [
+            i for i in vs_instances()
+            if i.is_complete and not i.is_prerelease and i.has_component(vc_tools)]
+        if not candidates:
             return None
+        # Highest installationVersion mirrors vswhere's -latest.
+        install_path = max(candidates, key=VsSetupInstance.version_key).installation_path
         ver_file = os.path.join(
             install_path, "VC", "Auxiliary", "Build", "Microsoft.VCToolsVersion.default.txt", )
         if not os.path.exists(ver_file):

@@ -84,7 +84,7 @@ class HttpRequester:
             [
                 " ".join([platform.system(), platform.release()]), "Python " + platform.python_version(), platform.machine(),
             ])
-        self._user_agent = "O3DE-ThirdParty/1.0 (%s)" % (platform_info)
+        self._user_agent = "ThirdParty/1.0 (%s)" % (platform_info)
 
     @staticmethod
     def _get_retries(max_retries: int):

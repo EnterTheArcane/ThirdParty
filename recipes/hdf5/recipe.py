@@ -48,6 +48,10 @@ class Recipe(RecipeBase[_Options]):
         replace_in_file(
             self, self.folders.source / "config" / "flags" / "HDFCompilerFlags.cmake",
             'HDF5_CMAKE_C_FLAGS "/W3" "/wd4100"', 'HDF5_CMAKE_C_FLAGS "/wd4100"', strict=False)
+        replace_in_file(
+            self,
+            self.folders.source / "CMakeLists.txt",
+            "set (CMAKE_POSITION_INDEPENDENT_CODE ON)", "")
 
     def generate(self):
         deps = CMakeDeps(self)
@@ -83,11 +87,6 @@ class Recipe(RecipeBase[_Options]):
         tc.generate()
 
     def build(self):
-        replace_in_file(
-            self,
-            self.folders.source / "CMakeLists.txt",
-            "set (CMAKE_POSITION_INDEPENDENT_CODE ON)",
-            "")
         cmake = CMake(self)
         cmake.configure()
         cmake.build()

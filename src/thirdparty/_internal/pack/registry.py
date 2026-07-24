@@ -45,12 +45,7 @@ _INDEX_TYPES = {MT_INDEX, "application/vnd.docker.distribution.manifest.list.v2+
 
 
 def parse_reference(uri: str) -> "tuple[str, str, str]":
-    """Split an OCI reference ``[registry/]repository[:tag|@digest]`` into (registry, repository, ref).
-
-    The first path segment is the registry host when it looks like one (contains ``.`` or ``:`` or is
-    ``localhost``); the trailing ``@sha256:…`` digest or ``:tag`` (after the last ``/``) is the ref,
-    defaulting to ``latest``.  E.g. ``ghcr.io/o3de/thirdparty/zlib:1.3.2`` ->
-    ``("ghcr.io", "o3de/thirdparty/zlib", "1.3.2")``."""
+    """Split an OCI reference ``[registry/]repository[:tag|@digest]`` into (registry, repository, ref)."""
     first, slash, rest = uri.partition("/")
     if slash and ("." in first or ":" in first or first == "localhost"):
         registry, remainder = first, rest
@@ -472,7 +467,7 @@ class OciRegistryClient:
     def _write_pull_metadata(
         self, dest: Path, doc: "dict[str, Any]", digest: str, want_platform: str) -> None:
         ann = cast("dict[str, Any]", doc.get("annotations") or {})
-        meta = {k: v for k, v in ann.items() if k.startswith("io.o3de.thirdparty.")}
+        meta = {k: v for k, v in ann.items() if k.startswith("thirdparty.")}
         meta["platform"] = want_platform
         meta["manifest_digest"] = digest
         (dest / ".thirdparty-oci.json").write_text(
@@ -486,7 +481,7 @@ class OciRegistryClient:
         manifest's annotations so registry tags match the rest of the build system; falls back to the
         OCI platform (``darwin-arm64``) for images that don't carry that annotation."""
         ann = cast("dict[str, Any]", manifest_desc.get("annotations") or {})
-        package_id = ann.get("io.o3de.thirdparty.package_id")
+        package_id = ann.get("thirdparty.package_id")
         if package_id:
             return f"{tag}-{package_id}"
         platform = cast("dict[str, Any]", manifest_desc.get("platform") or {})
@@ -551,8 +546,8 @@ class OciRegistryClient:
             if doc.get("mediaType") == MT_INDEX:
                 continue  # skip a nested index that happens to share the prefix
             ann: dict[str, Any] = doc.get("annotations") or {}
-            os_name = ann.get("io.o3de.thirdparty.os")
-            arch = ann.get("io.o3de.thirdparty.arch")
+            os_name = ann.get("thirdparty.os")
+            arch = ann.get("thirdparty.arch")
             if not os_name or not arch:
                 self._log(f"  skip {candidate}: no platform annotations")
                 continue
@@ -564,7 +559,7 @@ class OciRegistryClient:
                 "platform": platform,
                 "annotations": {
                     "org.opencontainers.image.ref.name": tag,
-                    "io.o3de.thirdparty.package_id": ann.get("io.o3de.thirdparty.package_id", ""),
+                    "thirdparty.package_id": ann.get("thirdparty.package_id", ""),
                 },
             }
             by_platform[_platform_key(platform)] = desc

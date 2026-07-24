@@ -25,37 +25,31 @@ def _now_iso() -> str:
 
 
 def _annotations(meta: PackageMeta, created: str) -> "dict[str, str]":
-    """Standard ``org.opencontainers.image.*`` plus queryable ``io.o3de.thirdparty.*``.
+    """Standard ``org.opencontainers.image.*`` plus queryable ``thirdparty.*``.
 
-    The ``io.o3de.thirdparty.os``/``.arch`` carry the canonical settings values (``Windows``,
+    The ``thirdparty.os``/``.arch`` carry the canonical settings values (``Windows``,
     ``X64``) - distinct from the OCI ``platform`` (``windows``, ``amd64``) - so the package
     system can filter on the exact toolchain identity.  ``None`` fields are omitted."""
     ann: dict[str, str] = {
         "org.opencontainers.image.title": meta.name,
         "org.opencontainers.image.version": meta.version,
         "org.opencontainers.image.created": created,
-        "io.o3de.thirdparty.name": meta.name,
-        "io.o3de.thirdparty.version": meta.version,
-        "io.o3de.thirdparty.package_id": meta.package_id,
-        "io.o3de.thirdparty.os": meta.os,
-        "io.o3de.thirdparty.arch": meta.arch,
-        "io.o3de.thirdparty.build_type": meta.build_type,
+        "thirdparty.name": meta.name,
+        "thirdparty.version": meta.version,
+        "thirdparty.package_id": meta.package_id,
+        "thirdparty.os": meta.os,
+        "thirdparty.arch": meta.arch,
+        "thirdparty.build_type": meta.build_type,
     }
     optional: dict[str, "str | None"] = {
-        "io.o3de.thirdparty.compiler": meta.compiler,
-        "io.o3de.thirdparty.compiler_version": meta.compiler_version,
-        "io.o3de.thirdparty.compiler_libcxx": meta.compiler_libcxx,
-        "io.o3de.thirdparty.compiler_runtime": meta.compiler_runtime,
+        "thirdparty.compiler": meta.compiler,
+        "thirdparty.compiler_version": meta.compiler_version,
+        "thirdparty.compiler_libcxx": meta.compiler_libcxx,
+        "thirdparty.compiler_runtime": meta.compiler_runtime,
     }
     for key, value in optional.items():
         if value is not None:
             ann[key] = value
-    if meta.options:
-        ann["io.o3de.thirdparty.options"] = meta.options_str()
-    if meta.deps:
-        ann["io.o3de.thirdparty.deps"] = ",".join(meta.deps)
-    if meta.info:
-        ann["io.o3de.thirdparty.info"] = canonical_json(meta.info).decode("utf-8")
     return ann
 
 

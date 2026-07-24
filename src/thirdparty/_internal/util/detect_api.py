@@ -287,7 +287,7 @@ def detect_default_compiler() -> tuple[Any, Any, Any] | None:
         find the default compiler on the build machine
         search order and priority:
         1. CC and CXX environment variables are always top priority
-        2. Visual Studio detection (Windows only) via vswhere or registry or environment variables
+        2. Visual Studio detection (Windows only) via the VS Setup Configuration API or environment variables
         3. Apple Clang (Mac only)
         4. cc executable
         5. gcc executable
