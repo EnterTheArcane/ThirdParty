@@ -6,6 +6,10 @@ on:
       arch:
         required: true
         type: string
+      recipes:
+        required: false
+        type: string
+        default: ""
       publish:
         required: false
         type: boolean
@@ -25,6 +29,11 @@ on:
         required: false
         type: boolean
         default: false
+      recipes:
+        description: Recipes to build (space-delimited names or globs; blank = all)
+        required: false
+        type: string
+        default: ""
 
 run-name: Linux ${{ inputs.arch }}
 
@@ -57,17 +66,18 @@ jobs:
         run: >-
           thirdparty build
           --target-arch ${{ inputs.arch }}
+          ${{ inputs.recipes }}
 
-      - name: Package OCI images
+      - name: Package Images
         if: ${{ !cancelled() && inputs.publish }}
         run: >-
-          thirdparty oci build "*"
+          thirdparty oci build ${{ inputs.recipes }}
           --target-arch ${{ inputs.arch }}
 
-      - name: Push OCI images
+      - name: Push Images
         if: ${{ !cancelled() && inputs.publish }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
-          thirdparty oci push "*"
+          thirdparty oci push ${{ inputs.recipes }}
           --target-arch ${{ inputs.arch }}

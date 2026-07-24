@@ -36,8 +36,13 @@ on:
         type: boolean
         required: false
         default: true
+      recipes:
+        description: Recipes
+        type: string
+        required: false
+        default: ""
       publish:
-        description: Publish OCI Images
+        description: Publish
         type: boolean
         required: false
         default: false
@@ -53,6 +58,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-linux.yml
     with:
       arch: ARM
+      recipes: ${{ inputs.recipes }}
       publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   linux-x64:
@@ -61,6 +67,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-linux.yml
     with:
       arch: X64
+      recipes: ${{ inputs.recipes }}
       publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   mac-arm:
@@ -69,6 +76,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-mac.yml
     with:
       arch: ARM
+      recipes: ${{ inputs.recipes }}
       publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   mac-x64:
@@ -77,6 +85,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-mac.yml
     with:
       arch: X64
+      recipes: ${{ inputs.recipes }}
       publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   windows-arm:
@@ -85,6 +94,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-windows.yml
     with:
       arch: ARM
+      recipes: ${{ inputs.recipes }}
       publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   windows-x64:
@@ -93,6 +103,7 @@ jobs:
     uses: ./.github/workflows/thirdparty-windows.yml
     with:
       arch: X64
+      recipes: ${{ inputs.recipes }}
       publish: ${{ github.event_name == 'workflow_dispatch' && inputs.publish || false }}
 
   combine:
@@ -119,4 +130,4 @@ jobs:
       - name: Combine multi-arch tags
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: thirdparty oci combine "*"
+        run: thirdparty oci combine ${{ inputs.recipes }}
