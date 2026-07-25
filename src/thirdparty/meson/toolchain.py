@@ -11,7 +11,7 @@ from thirdparty.build.flags import (
 from thirdparty.env import VirtualBuildEnv
 from thirdparty.errors import RecipeException
 from thirdparty.meson.helpers import get_apple_subsystem, to_cppstd_flag, to_cstd_flag, to_meson_machine, to_meson_value
-from thirdparty.microsoft import VCVars, msvc_runtime_flag
+from thirdparty.microsoft import msvc_runtime_flag
 from thirdparty.recipe import RecipeBase
 
 
@@ -578,9 +578,7 @@ class MesonToolchain:
         """
         Creates a ``recipe_meson_native.ini`` (if native builds) or a
         ``recipe_meson_cross.ini`` (if cross builds) with the proper content.
-        If Windows OS, it will be created a ``vcvars_env.bat`` as well.
         """
         self._recipe.output.info(f"MesonToolchain generated: {self._filename}")
         save(self._filename, self._content)
-        # FIXME: Should we check the OS and compiler to call VCVars?
-        VCVars(self._recipe).generate()
+        VirtualBuildEnv(self._recipe).generate()

@@ -4,12 +4,13 @@ import textwrap
 from typing import Any
 from xml.dom import minidom
 
-from thirdparty._internal.util.detect_vs import vs_installation_path
 from thirdparty._internal.model.settings import Settings
+from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty._internal.util.files import save, load
 from thirdparty.build import build_jobs
+from thirdparty.env import VirtualBuildEnv
 from thirdparty.errors import RecipeException
-from thirdparty.microsoft.visual import VCVars, msvs_toolset, msvc_runtime_flag, msvc_platform_from_arch, vs_ide_version
+from thirdparty.microsoft.visual import msvs_toolset, msvc_runtime_flag, msvc_platform_from_arch, vs_ide_version
 from thirdparty.recipe import RecipeBase
 
 
@@ -79,10 +80,12 @@ class MSBuildToolchain:
         #: cppstd value. By default, ``compiler.cppstd`` one.
         self.cppstd = recipe.settings.compiler_cxx_standard
         self.cstd = recipe.settings.compiler_c_standard
-        #: VS IDE Toolset, e.g., ``"v140"``. If ``compiler=msvc``, you can use ``compiler.toolset``
-        #: setting, else, it'll be based on ``msvc`` version.
+        #: VS IDE Toolset, e.g. ``"v143"`` or ``"ClangCL"``
         self.toolset = msvs_toolset(recipe)
         self.properties: dict[str, Any] = {}
+        _tc = find_toolchain(recipe)
+        if _tc is not None and _tc.msbuild_properties:
+            self.properties.update(_tc.msbuild_properties)
         self.toolset_version_full_path = _get_toolset_props(recipe)
 
     def _name_condition(self, settings: Settings):
@@ -97,17 +100,16 @@ class MSBuildToolchain:
 
     def generate(self):
         """
-        Generates a ``recipe_toolchain.props``, a ``recipe_toolchain_<config>.props``, and,
-        if ``compiler=msvc``, a ``vcvars_env.bat`` files. In the first two cases, they'll have the
-        valid XML format with all the good settings like any other VS project ``*.props`` file. The
-        last one emulates the ``vcvarsall.bat`` env script. See also :class:`VCVars`.
+        Generates a ``recipe_toolchain.props`` and a ``recipe_toolchain_<config>.props``
+        with the valid XML format and all the good settings like any other VS project
+        ``*.props`` file.
         """
         name, condition = self._name_condition(self._recipe.settings)
         config_filename = f"recipe_toolchain{name}.props"
         # Writing the props files
         self._write_config_toolchain(config_filename)
         self._write_main_toolchain(config_filename, condition)
-        VCVars(self._recipe).generate()
+        VirtualBuildEnv(self._recipe).generate()
 
     def _runtime_library(self):
         return {
@@ -232,8 +234,7 @@ def _get_toolset_props(recipe: RecipeBase):
     vs_version = vs_ide_version(recipe)
     if int(vs_version) <= 14:
         return
-    vs_install_path = recipe.conf.tools.msbuild.installation_path
-    vs_path = vs_install_path or vs_installation_path(vs_version)
+    vs_path = recipe.conf.tools.msbuild.installation_path
     if not vs_path or not os.path.isdir(vs_path):
         return
 

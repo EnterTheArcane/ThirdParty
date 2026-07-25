@@ -2,9 +2,11 @@ import jinja2
 import os
 import re
 import textwrap
+from pathlib import Path
 
 from thirdparty._internal.model.version import Version
 from thirdparty._internal.subsystems import deduce_subsystem, WINDOWS
+from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty._internal.util.files import load
 from thirdparty._internal.util.generators import relativize_path
 from thirdparty.android import android_abi
@@ -12,7 +14,7 @@ from thirdparty.apple.utils import get_apple_sdk_fullname, _to_apple_arch
 from thirdparty.apple.utils import is_apple_os, to_apple_arch
 from thirdparty.build import build_jobs
 from thirdparty.build.cross_building import cross_building
-from thirdparty.build.flags import architecture_flag, architecture_link_flag, libcxx_flags, threads_flags
+from thirdparty.build.flags import architecture_flag, architecture_link_flag, libcxx_flags, lto_flags, threads_flags
 from thirdparty.cmake.toolchain import RECIPE_TOOLCHAIN_FILENAME
 from thirdparty.cmake.utils import is_multi_configuration
 from thirdparty.errors import RecipeException
@@ -438,9 +440,15 @@ class AndroidSystemBlock(Block):
         #  https://developer.android.com/ndk/guides/cpp-support
         libcxx_str = self._recipe.settings.compiler_libcxx
 
-        android_ndk_path = self._recipe.conf.tools.android.ndk_path
+        tc = find_toolchain(self._recipe)
+        if tc is not None and tc.cmake_toolchain_file:
+            android_ndk_path = str(Path(tc.cmake_toolchain_file).parents[2])
+        else:
+            android_ndk_path = self._recipe.conf.tools.android.ndk_path
         if not android_ndk_path:
-            raise RecipeException("CMakeToolchain needs conf.tools.android.ndk_path configuration defined")
+            raise RecipeException(
+                "CMakeToolchain needs the android-ndk toolchain package or "
+                "conf.tools.android.ndk_path defined")
         android_ndk_path = os.fspath(android_ndk_path).replace("\\", "/")
         android_ndk_path = relativize_path(
             android_ndk_path, self._recipe, "${CMAKE_CURRENT_LIST_DIR}")
@@ -532,7 +540,14 @@ class AppleSystemBlock(Block):
         host_architecture = to_apple_archs(self._recipe)
 
         host_os_version = self._recipe.settings.os_version
-        host_sdk_name = self._recipe.conf.tools.apple.sdk_path or get_apple_sdk_fullname(self._recipe)
+        # Non-Apple llvm clang cannot resolve SDK names like "macosx", so the provider
+        # contract's absolute sysroot path is preferred over the SDK name.
+        _tc = find_toolchain(self._recipe)
+        _contract_sysroot = _tc.apple_sysroot if _tc is not None else None
+        host_sdk_name = (
+            self._recipe.conf.tools.apple.sdk_path
+            or _contract_sysroot
+            or get_apple_sdk_fullname(self._recipe))
         is_debug = self._recipe.settings.build_type == "Debug"
 
         # Reading some configurations to enable or disable some Xcode toolchain flags and variables
@@ -966,23 +981,53 @@ class CompilersBlock(Block):
         return {"compilers": compilers}
 
 
-class LLVMWindowsCrossBlock(Block):
-    """Cross-compiling for Windows with clang-cl & co from the llvm tool package.
+class ToolchainProviderBlock(Block):
+    """Configure build tools from the selected toolchain provider recipe's contract.
 
-    The windows-sdk/msvc dirs are passed as explicit /imsvc and /libpath: flags rather
-    than via INCLUDE/LIB, which clang-cl and lld-link split on ';' even on POSIX hosts.
+    The provider (settings.compiler_recipe: clang / msvc / apple-clang / gcc) publishes
+    a ToolchainInfo in its package_info(); this block emits everything conf can't carry:
+    binutils/linker/manifest tool, the target triple, MSVC CRT+SDK header/lib dirs, the
+    clang --gcc-toolchain pointer, and extra flags. The compiler executables themselves
+    reach CMAKE_<LANG>_COMPILER through CompilersBlock via the conf bridge (which seeds
+    conf.tools.build.compiler_executables from this same contract), so an explicit user
+    conf override still wins.
+
+    The msvc/sdk dirs are passed as explicit /imsvc and /libpath: flags rather than via
+    INCLUDE/LIB, which clang-cl and lld-link split on ';' even on POSIX hosts (cl.exe
+    additionally gets INCLUDE/LIB from the packages' buildenv on Windows hosts).
     """
     template = textwrap.dedent(
         """
-        # Cross-compiling for Windows with LLVM clang-cl (MSVC ABI)
-        set(CMAKE_C_COMPILER "{{ bin }}/clang-cl")
-        set(CMAKE_CXX_COMPILER "{{ bin }}/clang-cl")
-        set(CMAKE_RC_COMPILER "{{ bin }}/llvm-rc")
-        set(CMAKE_LINKER "{{ bin }}/lld-link")
-        set(CMAKE_AR "{{ bin }}/llvm-lib")
-        set(CMAKE_MT "{{ bin }}/llvm-mt")
+        # Toolchain provided by the '{{ provider }}' recipe
+        {% if linker %}
+        set(CMAKE_LINKER "{{ linker }}")
+        {% endif %}
+        {% if ar %}
+        set(CMAKE_AR "{{ ar }}")
+        {% endif %}
+        {% if ranlib %}
+        set(CMAKE_RANLIB "{{ ranlib }}")
+        {% endif %}
+        {% if mt %}
+        set(CMAKE_MT "{{ mt }}")
+        {% endif %}
+        {% if nm %}
+        set(CMAKE_NM "{{ nm }}")
+        {% endif %}
+        {% if strip %}
+        set(CMAKE_STRIP "{{ strip }}")
+        {% endif %}
+        {% if objcopy %}
+        set(CMAKE_OBJCOPY "{{ objcopy }}")
+        {% endif %}
+        {% if triple %}
         set(CMAKE_C_COMPILER_TARGET {{ triple }})
         set(CMAKE_CXX_COMPILER_TARGET {{ triple }})
+        {% endif %}
+        {% if gcc_toolchain %}
+        string(APPEND RECIPE_C_FLAGS " --gcc-toolchain=\\"{{ gcc_toolchain }}\\"")
+        string(APPEND RECIPE_CXX_FLAGS " --gcc-toolchain=\\"{{ gcc_toolchain }}\\"")
+        {% endif %}
         {% for d in include_dirs %}
         string(APPEND RECIPE_C_FLAGS " \\"/imsvc{{ d }}\\"")
         string(APPEND RECIPE_CXX_FLAGS " \\"/imsvc{{ d }}\\"")
@@ -992,36 +1037,89 @@ class LLVMWindowsCrossBlock(Block):
         string(APPEND RECIPE_EXE_LINKER_FLAGS " \\"/libpath:{{ d }}\\"")
         string(APPEND RECIPE_SHARED_LINKER_FLAGS " \\"/libpath:{{ d }}\\"")
         {% endfor %}
+        {% for f in extra_cflags %}
+        string(APPEND RECIPE_C_FLAGS " {{ f }}")
+        {% endfor %}
+        {% for f in extra_cxxflags %}
+        string(APPEND RECIPE_CXX_FLAGS " {{ f }}")
+        {% endfor %}
+        {% for f in extra_ldflags %}
+        string(APPEND RECIPE_EXE_LINKER_FLAGS " {{ f }}")
+        string(APPEND RECIPE_SHARED_LINKER_FLAGS " {{ f }}")
+        {% endfor %}
         """)
 
     def context(self) -> dict[str, Any] | None:
         settings = self._recipe.settings
-        if settings.os != "Windows" or settings.compiler != "clang":
+        tc = find_toolchain(self._recipe)
+        if tc is None:
             return None
-        if self._recipe.settings_build.os == "Windows":
-            return None
+        if tc.cmake_toolchain_file:
+            return None  # the delegated toolchain file (Android NDK) owns the compilers
 
-        llvm_dir = self._recipe.conf.tools.llvm.dir
-        if llvm_dir is None:
+        def _p(value: "str | None") -> "str | None":
+            return value.replace("\\", "/") if value else None
+
+        include_dirs = [str(d).replace("\\", "/") for d in tc.msvc_include_dirs]
+        lib_dirs = [str(d).replace("\\", "/") for d in tc.msvc_lib_dirs]
+        if settings.os == "Windows" and settings.compiler == "clang" and not include_dirs:
             raise RecipeException(
-                "Cross-building for Windows needs clang-cl from the 'llvm' tool package, "
-                "but conf.tools.llvm.dir is not set (missing requires_tool('llvm')?)")
-        triple = {"X64": "x86_64", "ARM": "aarch64"}[str(settings.arch)] + "-pc-windows-msvc"
-
-        # msvc dirs before windows-sdk ones, mirroring vcvars' INCLUDE order.
-        dirs_by_name: dict[str, tuple[list[str], list[str]]] = {}
-        for dep in self._recipe.dependencies.host.values():
-            if str(dep.name) in ("msvc", "windows-sdk"):
-                dirs_by_name[str(dep.name)] = (list(dep.info.includedirs), list(dep.info.libdirs))
-        include_dirs = [d for name in ("msvc", "windows-sdk") for d in dirs_by_name.get(name, ([], []))[0]]
-        lib_dirs = [d for name in ("msvc", "windows-sdk") for d in dirs_by_name.get(name, ([], []))[1]]
+                "Building for Windows with the clang toolchain needs the packaged MSVC "
+                "CRT/STL and Windows SDK dirs, but the toolchain contract has none "
+                "(clang recipe requirements missing msvc/windows-sdk?)")
+        # On a Windows build machine cl.exe/clang-cl and link.exe/lld-link read the CRT+SDK
+        # dirs from INCLUDE/LIB (the msvc + windows-sdk buildenv). The explicit /imsvc +
+        # /libpath: flags are needed only when cross-compiling from a non-Windows host,
+        # where those tools still expect ';'-separated vars. Emitting them natively is
+        # redundant (cl.exe even rejects /imsvc with D9002) and breaks recipes that embed
+        # CMAKE_*_FLAGS verbatim into generated sources (e.g. HDF5's H5build_settings.c).
+        if str(self._recipe.settings_build.os) == "Windows":
+            include_dirs = []
+            lib_dirs = []
 
         return {
-            "bin": (os.fspath(llvm_dir) + "/bin").replace("\\", "/"),
-            "triple": triple,
-            "include_dirs": [str(d).replace("\\", "/") for d in include_dirs],
-            "lib_dirs": [str(d).replace("\\", "/") for d in lib_dirs],
+            "provider": str(settings.compiler_recipe),
+            "linker": _p(tc.linker),
+            "ar": _p(tc.ar),
+            "ranlib": _p(tc.ranlib),
+            "mt": _p(tc.mt),
+            "nm": _p(tc.nm),
+            "strip": _p(tc.strip),
+            "objcopy": _p(tc.objcopy),
+            "triple": tc.target_triple,
+            "gcc_toolchain": _p(tc.gcc_toolchain),
+            "include_dirs": include_dirs,
+            "lib_dirs": lib_dirs,
+            "extra_cflags": list(tc.extra_cflags),
+            "extra_cxxflags": list(tc.extra_cxxflags),
+            "extra_ldflags": list(tc.extra_ldflags),
         }
+
+
+class LTOBlock(Block):
+    """Link-time optimization from the toolchain policy (see build.flags.lto_flags).
+
+    Flags are added to compile AND link lines; CMake's own IPO machinery is bypassed on
+    purpose (it defaults to full -flto and per-target opt-ins - this is a toolchain-wide
+    policy with fat objects so shipped static libs stay universally linkable).
+    """
+    template = textwrap.dedent(
+        """
+        # ThinLTO with fat objects (toolchain policy; conf.tools.build.lto=False opts out)
+        {% for f in lto_flags %}
+        string(APPEND RECIPE_C_FLAGS " {{ f }}")
+        string(APPEND RECIPE_CXX_FLAGS " {{ f }}")
+        {% endfor %}
+        string(APPEND RECIPE_EXE_LINKER_FLAGS " {{ lto_link_flags }}")
+        string(APPEND RECIPE_SHARED_LINKER_FLAGS " {{ lto_link_flags }}")
+        """)
+
+    def context(self) -> dict[str, Any] | None:
+        flags = lto_flags(self._recipe)
+        if not flags:
+            return None
+        link_flags = " ".join(f for f in flags if f.startswith("-flto"))
+        return {"lto_flags": flags, "lto_link_flags": link_flags}
 
 
 class GenericSystemBlock(Block):

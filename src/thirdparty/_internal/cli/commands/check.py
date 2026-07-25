@@ -12,6 +12,7 @@ from colorama import Fore, Style
 import thirdparty
 from thirdparty._internal.cli.command import command
 from thirdparty._internal.loader import _parse_recipe, make_probe_recipe, resolve_version
+from thirdparty._internal.model.profile import BuildProfile
 from thirdparty._internal.methods import run_configure_method
 from thirdparty._internal.model.recipe import RecipeBase
 from thirdparty.errors import RecipeInvalidConfiguration
@@ -82,7 +83,8 @@ def _check_recipes(
         for target_os, target_arch in _PLATFORMS:
             try:
                 probe = make_probe_recipe(
-                    cls, recipes_root, name, version, build_type, target_os=target_os, target_arch=target_arch)
+                    cls, recipes_root, name, version,
+                    BuildProfile(build_type=build_type, target_os=target_os, target_arch=target_arch))
                 run_configure_method(probe)
                 n_ok += 1
             except RecipeInvalidConfiguration:

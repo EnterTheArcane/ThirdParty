@@ -78,6 +78,7 @@ class _BuildTools:
     install_strip: InstallStrip | None = None
     jobs: int | None = None
     linker_scripts: list[PathValue] = field(default_factory=lambda: [])
+    lto: bool | None = None
     rcflags: list[str] = field(default_factory=lambda: [])
     sharedlinkflags: list[str] = field(default_factory=lambda: [])
     skip_test: bool | None = None

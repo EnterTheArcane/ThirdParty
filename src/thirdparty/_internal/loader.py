@@ -11,14 +11,16 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, cast
 
+from thirdparty._internal import toolchains
 from thirdparty._internal.errors import NotFoundException
 from thirdparty._internal.model.conf import Conf
 from thirdparty._internal.model.dependencies import RecipeDependencies
 from thirdparty._internal.model.info import Info
+from thirdparty._internal.model.profile import BuildProfile
 from thirdparty._internal.model.recipe import RecipeBase
 from thirdparty._internal.model.settings import Settings
 from thirdparty._internal.model.state import RecipeState
-from thirdparty._internal.util.detect import detect_settings, platform_tag
+from thirdparty._internal.util.detect import platform_tag
 from thirdparty._internal.util.files import chdir
 from thirdparty.errors import RecipeException
 
@@ -156,28 +158,28 @@ def make_probe_recipe(
     recipes_root: Path,
     name: str,
     version: str,
-    build_type: str,
+    profile: BuildProfile | None = None,
     jobs: int | None = None,
-    target_os: str | None = None,
-    target_arch: str | None = None,
     verbose: bool = False) -> RecipeBase:
     """Instantiate a recipe with just enough state (settings, conf, requires shim) to
     drive ``configure()``/``requirements()``.
 
-    ``target_os``/``target_arch`` select the HOST/target platform (default: build machine).
-    ``settings`` is the target platform; ``settings_build`` is always the build machine.
+    ``profile`` selects the HOST/target platform and toolchain (default: build machine,
+    auto-selected toolchain).  ``settings`` is the target platform; ``settings_build``
+    is always the build machine - both carry the resolved toolchain fields.
     No build folders are created - this is for dependency discovery only.  ``build.py``
     layers folder setup on top of this for actual builds.
     """
+    profile = profile or BuildProfile()
     recipe = recipe_cls()
     recipe.version = version
     recipe.folders.set_recipe(recipes_root / name)
 
-    settings = detect_settings(build_type, target_os, target_arch)
-    if target_os is None and target_arch is None:
+    settings = toolchains.resolve_settings(profile, recipes_root)
+    if not profile.is_cross:
         settings_build = settings
     else:
-        settings_build = detect_settings(build_type)
+        settings_build = toolchains.resolve_settings(profile.build_machine(), recipes_root)
     conf = Conf()
     conf.tools.build.jobs = jobs if jobs is not None else cpu_count()
     conf.tools.cmake.configure_args = []
@@ -219,9 +221,13 @@ def resolve_package_id(recipe: RecipeBase) -> str:
 
 
 def compute_package_id(
-    recipe_cls: type[RecipeBase], recipes_root: Path, name: str, version: str, build_type: str = "Release", target_os: str | None = None, target_arch: str | None = None) -> str:
-    """Resolve a recipe's package_id for a target via a cheap settings-only probe."""
-    probe = make_probe_recipe(recipe_cls, recipes_root, name, version, build_type, target_os=target_os, target_arch=target_arch)
+    recipe_cls: type[RecipeBase], recipes_root: Path, name: str, version: str, profile: BuildProfile | None = None) -> str:
+    """Resolve a recipe's package_id for a target via a cheap settings-only probe.
+
+    Package identity is deliberately ``<os>-<arch>`` only - the compiler choice does NOT
+    change the package folder (switching compilers requires --force/--clean).
+    """
+    probe = make_probe_recipe(recipe_cls, recipes_root, name, version, profile)
     return resolve_package_id(probe)
 
 

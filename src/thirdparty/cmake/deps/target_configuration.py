@@ -32,6 +32,22 @@ _CMAKE_LANGUAGES = {
 }
 
 
+def _defines_target(dep: Any) -> bool:
+    """Whether *dep* defines an importable ``dep::dep`` CMake target.
+
+    A metadata-only dependency - notably the toolchain provider recipe, which contributes
+    only buildenv and the toolchain contract and has empty includedirs/libdirs - defines no
+    target. Referencing it in a consumer's INTERFACE_LINK_LIBRARIES would point at a target
+    that is never created, so such dependencies are dropped from link interfaces.
+    """
+    info = dep.info
+    if info.has_components:
+        return True
+    return bool(
+        info.package_framework or info.frameworks or info.includedirs or info.libs
+        or info.system_libs or info.defines)
+
+
 class TargetConfigurationTemplate2:
     """
     FooTarget-release.cmake
@@ -73,7 +89,7 @@ class TargetConfigurationTemplate2:
         if not requires and not components:  # global info without components definition
             # require the pkgname::pkgname base (user defined) or INTERFACE base target
             for req, d in transitive_reqs.items():
-                if d.info.exe:
+                if d.info.exe or not _defines_target(d):
                     continue
                 dep_target = self._cmakedeps.get_property("cmake_target_name", d)
                 dep_target = dep_target or f"{d.name}::{d.name}"
@@ -113,8 +129,8 @@ class TargetConfigurationTemplate2:
                                    f"'{required_pkg}::{required_comp}' but component "
                                    f"'{required_comp}' not found in {required_pkg}")
                             raise RecipeException(msg)
-                        if dep.info.exe:
-                            continue  # It doesn't make sense to link a package that is an App
+                        if dep.info.exe or not _defines_target(dep):
+                            continue  # nothing linkable (an app, or a metadata-only dep)
                         comp = None
                         default_target = f"{dep.name}::{dep.name}"  # replace_requires
                         link = req.libs  # Do what the requirement to that package says

@@ -50,7 +50,13 @@ class MSBuild:
         :return: ``str`` msbuild command line.
         """
         # TODO: Enable output_binary_log via config
+        # msbuild.exe resolves from PATH via the msbuild package's buildenv script.
         cmd = ('msbuild.exe "%s" -p:Configuration="%s" -p:Platform="%s"' % (sln, self.build_type, self.platform))
+
+        # The packaged msbuild ships without FileTracker (an MSI-only VS component);
+        # incremental up-to-date tracking is disabled rather than failing the build.
+        if self._recipe.conf.tools.msbuild.installation_path:
+            cmd += " -p:TrackFileAccess=false"
 
         verbosity = msbuild_verbosity_cmd_line_arg(self._recipe)
         if verbosity:

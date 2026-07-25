@@ -17,6 +17,7 @@ class Settings:
     os: str
 
     compiler: str | None = None
+    compiler_recipe: str | None = None
     compiler_c_standard: str | None = None
     compiler_cxx_standard: str | None = None
     compiler_libcxx: str | None = None

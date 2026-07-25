@@ -11,7 +11,9 @@ from thirdparty._internal.loader import (
     resolve_version,
     try_load_recipe_class,
 )
+from thirdparty._internal.model.profile import BuildProfile
 from thirdparty._internal.pack import gather_meta, oci_arch, oci_os
+from thirdparty._internal.pack.meta import probe_redistributable
 from thirdparty._internal.pack.oci import OciBackend
 from thirdparty._internal.pack.registry import OciRegistryClient, parse_reference
 from thirdparty._internal.util.detect import _machine_arch, _machine_os
@@ -149,9 +151,14 @@ def _push(args: argparse.Namespace) -> None:
             print(f"[thirdparty] error: recipe not found: {name}", file=sys.stderr)
             failures += 1
             continue
+        if not probe_redistributable(recipes_root, name):
+            print(f"[thirdparty] error: '{name}' is not redistributable (toolchain/SDK licensing) and can never be pushed to a registry", file=sys.stderr)
+            failures += 1
+            continue
         version = resolve_version(cls)
         package_id = compute_package_id(
-            cls, recipes_root, name, version, args.build_type, args.target_os, args.target_arch)
+            cls, recipes_root, name, version,
+            BuildProfile(build_type=args.build_type, target_os=args.target_os, target_arch=args.target_arch))
         layout = _layout_dir(build_root, name, package_id, args.output)
         if not (layout / "index.json").exists():
             print(f"[thirdparty] error: no OCI image for {name} ({package_id}); "

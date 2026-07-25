@@ -70,6 +70,7 @@ class Recipe(RecipeBase):
             lib_dirs=[pkg / "lib" / api / arch for api in _LIB_APIS])
 
     def package_info(self) -> None:
+        self.info.redistributable = False
         root = self.folders.package
         arch = _ARCH[self.settings.arch]
 

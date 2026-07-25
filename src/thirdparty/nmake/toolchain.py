@@ -2,9 +2,9 @@
 from typing import cast
 
 from thirdparty.build.flags import build_type_flags, cppstd_flag, build_type_link_flags
-from thirdparty.env import Environment
+from thirdparty.env import Environment, VirtualBuildEnv
 from thirdparty.nmake.deps import format_defines
-from thirdparty.microsoft.visual import msvc_runtime_flag, VCVars
+from thirdparty.microsoft.visual import msvc_runtime_flag
 from thirdparty.recipe import RecipeBase
 
 
@@ -125,4 +125,4 @@ class NMakeToolchain:
     def generate(self, env: Environment | None = None, scope: str = "build"):
         env = env or self.environment()
         env.vars(self._recipe, scope=scope).save_script("nmaketoolchain")
-        VCVars(self._recipe).generate(scope=scope)
+        VirtualBuildEnv(self._recipe).generate(scope=scope)

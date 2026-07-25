@@ -1,6 +1,7 @@
 from typing import Any
 
 from thirdparty._internal.model.version import Version
+from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty.errors import RecipeException
 from thirdparty.recipe import RecipeBase
 
@@ -215,10 +216,39 @@ def llvm_clang_front(recipe: RecipeBase) -> str | None:
     # Only Windows clang with MSVC backend (LLVM/Clang, not MSYS2 clang)
     if (recipe.settings.os != "Windows" or recipe.settings.compiler != "clang" or not recipe.settings.compiler_runtime):
         return
+    tc = find_toolchain(recipe)
+    if tc is not None and tc.front_kind in ("clang-cl", "clang"):
+        return tc.front_kind
     compilers = recipe.conf.tools.build.compiler_executables
     if "clang-cl" in str(compilers.get("c", "")) or "clang-cl" in str(compilers.get("cpp", "")):
         return "clang-cl"  # The MSVC-compatible front
     return "clang"  # The GNU-compatible front
+
+
+def lto_flags(recipe: RecipeBase) -> list[str]:
+    """Link-time-optimization flags for the selected toolchain (compile AND link).
+
+    Default policy: ThinLTO with FAT objects, on by default for the clang toolchain in
+    optimized configs. Fat objects carry bitcode AND machine code, so the shipped static
+    libs stay linkable by non-LLVM linkers (MSVC link.exe, plain ld) - which is why LTO
+    is limited to ELF targets: -ffat-lto-objects is not supported for Mach-O, and COFF
+    support is unverified for the packaged LLVM (plain ThinLTO there would make static
+    libs bitcode-only and toolchain-locked). Opt out per recipe with
+    conf.tools.build.lto = False.
+    """
+    if recipe.conf.tools.build.lto is False:
+        return []
+    settings = recipe.settings
+    if settings.build_type not in ("Release", "RelWithDebInfo"):
+        return []
+    if settings.os != "Linux":
+        return []
+    tc = find_toolchain(recipe)
+    if tc is None or tc.front_kind != "clang":
+        if not (recipe.conf.tools.build.lto and settings.compiler == "gcc"):
+            return []
+        return ["-flto", "-ffat-lto-objects"]
+    return ["-flto=thin", "-ffat-lto-objects"]
 
 
 def cppstd_flag(recipe: RecipeBase) -> str:

@@ -1,6 +1,5 @@
 import jinja2
 import os
-import platform
 import textwrap
 from collections import OrderedDict
 from typing import Any, cast
@@ -16,12 +15,13 @@ from thirdparty.cmake.toolchain.blocks import (
     WarningFilterBlock,
     UserToolchain,
     GenericSystemBlock,
-    LLVMWindowsCrossBlock,
+    ToolchainProviderBlock,
     AndroidSystemBlock,
     AppleSystemBlock,
     FPicBlock,
     ArchitectureBlock,
     GLibCXXBlock,
+    LTOBlock,
     VSRuntimeBlock,
     CppStdBlock,
     ParallelBlock,
@@ -42,7 +42,6 @@ from thirdparty.cmake.toolchain.blocks import (
 )
 from thirdparty.cmake.utils import is_multi_configuration
 from thirdparty.env import Environment, VirtualBuildEnv, VirtualRunEnv
-from thirdparty.microsoft import VCVars
 
 from thirdparty.recipe import RecipeBase
 
@@ -140,7 +139,7 @@ class CMakeToolchain:
             self._recipe, self, [
                 ("user_toolchain", UserToolchain),
                 ("generic_system", GenericSystemBlock),
-                ("llvm_win_cross", LLVMWindowsCrossBlock),
+                ("toolchain_provider", ToolchainProviderBlock),
                 ("warning_filter", WarningFilterBlock),
                 ("compilers", CompilersBlock),
                 ("android_system", AndroidSystemBlock),
@@ -150,6 +149,7 @@ class CMakeToolchain:
                 ("linker_scripts", LinkerScriptsBlock),
                 ("rpath_link_flags", RpathLinkFlagsBlock),
                 ("libcxx", GLibCXXBlock),
+                ("lto", LTOBlock),
                 ("vs_runtime", VSRuntimeBlock),
                 ("vs_debugger_environment", VSDebuggerEnvironment),
                 ("cppstd", CppStdBlock),
@@ -220,15 +220,11 @@ class CMakeToolchain:
             toolchain_file = self.filename
             save(os.path.join(self._recipe.folders.generators, toolchain_file), self.content)
             Output(str(self._recipe)).info(f"CMakeToolchain generated: {toolchain_file}")
-        # Generators like Ninja or NMake requires an active vcvars
+        # Everything the build needs (compiler, cmake, ninja, INCLUDE/LIB on Windows)
+        # comes from recipe packages; the aggregated build environment script is what
+        # puts their bindirs/vars into effect for run() and the CMake build helpers.
         if self.generator is not None and "Visual" not in self.generator:
-            VCVars(self._recipe).generate()
-            # VCVars is a no-op off Windows, but the tool dependencies (cmake, ninja, ...) still
-            # need to be on PATH for run() and the CMake build helpers (which invoke a bare
-            # `cmake`/`ninja`). On non-Windows emit the aggregated build environment as an env
-            # script so run() sources it (Windows relies on vcvars + a system/tool cmake).
-            if platform.system() != "Windows":
-                VirtualBuildEnv(self._recipe).generate()
+            VirtualBuildEnv(self._recipe).generate()
 
         cache_variables: dict[str, Any] = {}
         for name, value in self.cache_variables.items():

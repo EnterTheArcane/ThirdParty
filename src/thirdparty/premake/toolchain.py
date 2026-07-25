@@ -8,7 +8,6 @@ from thirdparty.build.cross_building import cross_building
 from thirdparty.build.flags import architecture_flag, architecture_link_flag, libcxx_flags, threads_flags
 from thirdparty.env.virtualbuildenv import VirtualBuildEnv
 from thirdparty.files import save
-from thirdparty.microsoft.visual import VCVars
 from thirdparty.premake.deps import PREMAKE_ROOT_FILE
 from thirdparty.recipe import RecipeBase
 
@@ -250,9 +249,7 @@ class PremakeToolchain:
             indent_level=8, )
         save(
             cast(RecipeBase, self), os.path.join(self._recipe.folders.generators, self.filename), content, )
-        # Generate VCVars if using MSVC
-        if "msvc" in cast(str, self._recipe.settings.compiler):
-            VCVars(self._recipe).generate()
+        VirtualBuildEnv(self._recipe).generate()
 
     def _target_build_os(self):
         recipe_os = str(self._recipe.settings.os)

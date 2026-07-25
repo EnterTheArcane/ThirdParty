@@ -114,14 +114,12 @@ class BuildCommandTests(unittest.TestCase):
                     recipes_root,
                     build_root,
                     ["openimageio", "ffmpeg"],
-                    "Release",
+                    build_command.BuildProfile(),
                     jobs=None,
                     resume=None,
                     dry_run=False,
                     force=False,
                     generate_only=False,
-                    target_os=None,
-                    target_arch=None,
                 )
 
         self.assertEqual(exc.exception.code, 1)
@@ -159,10 +157,8 @@ class BuildCommandTests(unittest.TestCase):
                     recipes_root,
                     build_root,
                     "fails",
-                    "Release",
+                    build_command.BuildProfile(),
                     set(),
-                    target_os=None,
-                    target_arch=None,
                 )
 
             platform_tag = build_command.detect_platform_tag(None, None)
@@ -208,10 +204,8 @@ class BuildCommandTests(unittest.TestCase):
                     recipes_root,
                     build_root,
                     "stale",
-                    "Release",
+                    build_command.BuildProfile(),
                     set(),
-                    target_os=None,
-                    target_arch=None,
                 )
 
             self.assertFalse((build_dir / "stale.txt").exists())

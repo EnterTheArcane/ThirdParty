@@ -1,25 +1,22 @@
 
 from thirdparty._internal.errors import recipe_exception_formatter
+from thirdparty._internal.toolchains import injectable
 from thirdparty.recipe import RecipeBase
 
 
-_WINDOWS_CROSS_TOOLCHAIN = ("llvm", "msvc", "windows-sdk")
+def _inject_toolchain_requires(recipe: RecipeBase):
+    """Inject the selected toolchain provider recipe into every consumer.
 
-
-def _inject_windows_cross_requires(recipe: RecipeBase):
-    """Recipes cross-targeting Windows need the SDK + MSVC CRT (host context, target arch)
-    and the llvm toolchain (build context); injected here so recipes stay agnostic."""
-    if recipe.settings.os != "Windows" or recipe.settings_build.os == "Windows":
+    One host-context require per consumer; the provider pulls its own ingredients
+    (llvm, msvc, windows-sdk, apple-sdk, linux-sysroot, android-ndk) through its own
+    requirements, branching on ITS settings (= this recipe's target). Recipes that are
+    themselves part of the selected toolchain's layer are skipped to avoid cycles.
+    """
+    if not injectable(recipe):
         return
-    if getattr(recipe, "name", None) in _WINDOWS_CROSS_TOOLCHAIN:
-        return
-    existing = {str(r.name) for r in recipe._requires}
-    if "windows-sdk" not in existing:
-        recipe.requires("windows-sdk")
-    if "msvc" not in existing:
-        recipe.requires("msvc")
-    if "llvm" not in existing:
-        recipe.requires_tool("llvm")
+    provider = str(recipe.settings.compiler_recipe)
+    if provider not in {str(r.name) for r in recipe._requires}:
+        recipe.requires(provider)
 
 
 def run_configure_method(recipe: RecipeBase):
@@ -37,4 +34,4 @@ def run_configure_method(recipe: RecipeBase):
     with recipe_exception_formatter(recipe, "requirements"):
         recipe.requirements()
 
-    _inject_windows_cross_requires(recipe)
+    _inject_toolchain_requires(recipe)

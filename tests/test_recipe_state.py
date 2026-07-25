@@ -107,7 +107,9 @@ class RecipeStateTest(unittest.TestCase):
         self.assertFalse(hasattr(recipe, "origin"))
 
     def test_probe_recipe_receives_complete_state(self):
-        recipe = make_probe_recipe(Recipe, self._recipes_root(), "recipe-state-test", "1.0", "Release")
+        from thirdparty._internal.model.profile import BuildProfile
+        recipe = make_probe_recipe(
+            Recipe, self._recipes_root(), "recipe-state-test", "1.0", BuildProfile(build_type="Release"))
 
         self.assertIsInstance(recipe.dependencies, RecipeDependencies)
         self.assertFalse(recipe.is_build_context)

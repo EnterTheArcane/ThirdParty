@@ -1,71 +1,7 @@
 from __future__ import annotations
-import os
 import platform
-import re
-import subprocess
-from functools import lru_cache
 
 from thirdparty._internal.model.settings import Settings
-
-
-@lru_cache(maxsize=1)
-def _detect_msvc_version():
-    if platform.system() != "Windows":
-        return None
-    try:
-        from thirdparty._internal.util.setupconfiguration import vs_instances, VsSetupInstance
-        vc_tools = "Microsoft.VisualStudio.Component.VC.Tools.x86.x64"
-        candidates = [
-            i for i in vs_instances()
-            if i.is_complete and not i.is_prerelease and i.has_component(vc_tools)]
-        if not candidates:
-            return None
-        # Highest installationVersion mirrors vswhere's -latest.
-        install_path = max(candidates, key=VsSetupInstance.version_key).installation_path
-        ver_file = os.path.join(
-            install_path, "VC", "Auxiliary", "Build", "Microsoft.VCToolsVersion.default.txt", )
-        if not os.path.exists(ver_file):
-            return None
-        with open(ver_file) as f:
-            full_ver = f.read().strip()
-        parts = full_ver.split(".")
-        minor = int(parts[1])
-        # VCTools 14.Nx.x -> recipe msvc "19N" (14.3x=193, 14.4x=194, ...)
-        return str(190 + minor // 10)
-    except Exception:
-        return None
-
-
-@lru_cache(maxsize=1)
-def _detect_apple_clang_version() -> str | None:
-    for cmd in (["xcrun", "clang", "--version"], ["clang", "--version"]):
-        try:
-            out = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT)
-            m = re.search(r"Apple clang version (\d+)", out, re.IGNORECASE)
-            if m:
-                return m.group(1)
-        except Exception:
-            continue
-    return None
-
-
-@lru_cache(maxsize=1)
-def _detect_linux_compiler():
-    for exe in ("gcc", "clang", "cc", "x86_64-linux-gnu-gcc", "aarch64-linux-gnu-gcc"):
-        try:
-            out = subprocess.check_output(
-                [exe, "--version"], text=True, stderr=subprocess.STDOUT, )
-            if "clang" in out.lower():
-                m = re.search(r"clang version (\d+)", out)
-                if m:
-                    return "clang", m.group(1)
-            else:
-                m = re.search(r"(\d+)\.\d+", out.splitlines()[0])
-                if m:
-                    return "gcc", m.group(1)
-        except Exception:
-            continue
-    return None, None
 
 
 # Canonical platform names used by this system (deliberately simpler than Conan's full set).
@@ -125,14 +61,14 @@ def _default_target_arch(the_os: str, target_arch: str | None) -> str:
 
 
 def detect_settings(build_type: str = "Release", target_os: str | None = None, target_arch: str | None = None) -> Settings:
-    """Detect build settings for the *target* platform.
+    """Base settings for the *target* platform: os, arch, build type, Apple SDK default.
 
     ``target_os``/``target_arch`` select the HOST/target platform the package will run
-    on (defaulting to the build machine).  The compiler, however, is always detected from
-    the BUILD MACHINE - it is the toolchain that exists locally and does the compiling.
-    For same-OS cross-architecture builds (e.g. X64 -> ARM) this is exactly right;
-    the target arch flows into the toolchain via ``settings.arch`` (and, for MSVC + Ninja,
-    into the vcvars argument computed from ``settings_build.arch`` vs ``settings.arch``).
+    on (defaulting to the build machine).  Compiler fields are deliberately NOT set
+    here: toolchains come from recipes, selected by
+    ``thirdparty._internal.toolchains`` (which fills ``compiler``/``compiler_recipe``
+    and friends via ``apply_compiler_settings``) - never probed from ambient machine
+    state.
     """
     machine_os = _machine_os()
     the_os = normalize_os(target_os) or machine_os
@@ -143,41 +79,6 @@ def detect_settings(build_type: str = "Release", target_os: str | None = None, t
     apple_sdk = _APPLE_SDK_DEFAULTS.get((the_os, arch))
     if apple_sdk:
         settings.os_sdk = apple_sdk
-
-    # Compiler detection is keyed on the BUILD MACHINE os (the locally available toolchain).
-    if machine_os == "Windows":
-        msvc_ver = _detect_msvc_version()
-        if msvc_ver:
-            settings.compiler = "msvc"
-            settings.compiler_version = msvc_ver
-            settings.compiler_runtime = "dynamic"
-            settings.compiler_cxx_standard = "17"
-    elif the_os == "Windows":
-        # Cross-compiling for Windows: clang-cl from the llvm package, MSVC ABI. The
-        # runtime matches native detection so packages stay interchangeable. No version:
-        # the compiler comes from the llvm recipe, whose version this must not duplicate.
-        settings.compiler = "clang"
-        settings.compiler_runtime = "dynamic"
-        settings.compiler_cxx_standard = "17"
-    elif machine_os == "Mac":
-        ver = _detect_apple_clang_version()
-        if ver:
-            settings.compiler = "apple-clang"
-            settings.compiler_version = ver + ".0"
-            settings.compiler_libcxx = "libc++"
-            settings.compiler_cxx_standard = "17"
-    else:
-        compiler, ver = _detect_linux_compiler()
-        if compiler == "gcc":
-            settings.compiler = "gcc"
-            settings.compiler_version = ver
-            settings.compiler_libcxx = "libstdc++11"
-            settings.compiler_cxx_standard = "17"
-        elif compiler == "clang":
-            settings.compiler = "clang"
-            settings.compiler_version = ver
-            settings.compiler_libcxx = "libc++"
-            settings.compiler_cxx_standard = "17"
 
     # os.version (deployment target) applies to the TARGET os; only known when the build
     # machine is itself a Mac.

@@ -7,6 +7,7 @@ from collections import OrderedDict, defaultdict
 from enum import Enum
 
 from thirdparty._internal.model.conf import Conf
+from thirdparty._internal.model.toolchain import ToolchainInfo
 from thirdparty._internal.output import Output
 from thirdparty._internal.util.files import load, save
 from thirdparty.env.environment import Environment
@@ -706,6 +707,8 @@ class Info:
     buildenv: Environment
     runenv: Environment
     conf: Conf
+    toolchain: ToolchainInfo
+    redistributable: bool
 
     def __init__(self, set_defaults: bool = False):
         self.components = defaultdict(lambda: _Component(set_defaults))
@@ -714,13 +717,15 @@ class Info:
         self.buildenv = Environment()
         self.runenv = Environment()
         self.conf = Conf()
+        self.toolchain = ToolchainInfo()
+        self.redistributable = True
 
     def __getattr__(self, attr: str) -> Any:
         # all info.xxx of not defined things will go to the global package
         return getattr(self._package, attr)
 
     def __setattr__(self, attr: str, value: Any):
-        if attr in ("components", "default_components", "_package", "_aggregated", "required_components", "buildenv", "runenv", "conf"):
+        if attr in ("components", "default_components", "_package", "_aggregated", "required_components", "buildenv", "runenv", "conf", "toolchain", "redistributable"):
             super(Info, self).__setattr__(attr, value)
         else:
             setattr(self._package, attr, value)
@@ -732,6 +737,10 @@ class Info:
             "runenv": self.runenv.serialize(),
             "conf": self.conf.serialize_state(),
         }
+        if self.toolchain:
+            ret["toolchain"] = self.toolchain.serialize()
+        if not self.redistributable:
+            ret["redistributable"] = False
         if self.default_components:
             ret["default_components"] = self.default_components
         for component_name, info in self.components.items():
@@ -743,6 +752,8 @@ class Info:
         self.buildenv = Environment().deserialize(content.pop("buildenv", {}))
         self.runenv = Environment().deserialize(content.pop("runenv", {}))
         self.conf = Conf().deserialize_state(content.pop("conf", {}))
+        self.toolchain = ToolchainInfo.deserialize(content.pop("toolchain", {}))
+        self.redistributable = content.pop("redistributable", True)
         self.default_components = content.get("default_components")
         for component_name, info in content.items():
             if component_name == "default_components":
@@ -775,6 +786,8 @@ class Info:
         self.buildenv.compose_env(other.buildenv)
         self.runenv.compose_env(other.runenv)
         self.conf.compose_conf(other.conf)
+        self.toolchain.merge(other.toolchain)
+        self.redistributable = self.redistributable and other.redistributable
         # COMPONENTS
         for cname, c in other.components.items():
             # Make sure each component created on the fly does not bring new defaults
@@ -787,6 +800,7 @@ class Info:
             component.set_relative_base_folder(folder)
         self.buildenv.set_relative_base_folder(folder)
         self.runenv.set_relative_base_folder(folder)
+        self.toolchain.set_relative_base_folder(folder)
 
     def deploy_base_folder(self, package_folder: str, deploy_folder: str):
         """Prepend the folder to all the directories"""
@@ -845,6 +859,8 @@ class Info:
         aggregated.buildenv = self.buildenv.copy()
         aggregated.runenv = self.runenv.copy()
         aggregated.conf = self.conf.copy()
+        aggregated.toolchain = self.toolchain
+        aggregated.redistributable = self.redistributable
         return aggregated
 
     def check_component_requires(self, recipe: RecipeBase):

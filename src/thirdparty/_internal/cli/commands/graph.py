@@ -6,6 +6,7 @@ from pathlib import Path
 
 from thirdparty._internal.cli.command import command
 from thirdparty._internal.graph import Graph
+from thirdparty._internal.model.profile import BuildProfile
 
 
 def setup_parser(p: argparse.ArgumentParser) -> None:
@@ -48,7 +49,7 @@ def graph(args: argparse.Namespace) -> None:
         print("[thirdparty] no recipes matched", file=sys.stderr)
         sys.exit(1)
 
-    g = Graph.build(recipes_root, roots, args.build_type, transitive=True)
+    g = Graph.build(recipes_root, roots, BuildProfile(build_type=args.build_type), transitive=True)
 
     if args.fmt == "tree":
         _print_tree(g, roots, args.tools)

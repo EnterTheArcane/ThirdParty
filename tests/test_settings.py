@@ -59,7 +59,6 @@ class SettingsTests(unittest.TestCase):
         with (
             patch.object(detect_util, "_machine_os", return_value="Mac"),
             patch.object(detect_util, "_machine_arch", return_value="X64"),
-            patch.object(detect_util, "_detect_apple_clang_version", return_value="17"),
         ):
             settings = detect_util.detect_settings(target_os="iOS")
 
@@ -67,12 +66,14 @@ class SettingsTests(unittest.TestCase):
         self.assertEqual(settings.arch, "ARM")
         self.assertEqual(settings.os_sdk, "iphoneos")
         self.assertIsNone(settings.os_sdk_version)
+        # Compilers come from toolchain recipes, never ambient probing.
+        self.assertIsNone(settings.compiler)
+        self.assertIsNone(settings.compiler_recipe)
 
     def test_detect_settings_defaults_ios_x64_to_simulator_sdk(self):
         with (
             patch.object(detect_util, "_machine_os", return_value="Mac"),
             patch.object(detect_util, "_machine_arch", return_value="ARM"),
-            patch.object(detect_util, "_detect_apple_clang_version", return_value="17"),
         ):
             settings = detect_util.detect_settings(target_os="iOS", target_arch="X64")
 

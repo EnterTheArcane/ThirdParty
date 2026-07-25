@@ -11,6 +11,7 @@ from thirdparty._internal.loader import (
     resolve_version,
     try_load_recipe_class,
 )
+from thirdparty._internal.model.profile import BuildProfile
 from thirdparty.errors import RecipeException
 from thirdparty.recipe import RecipeBase
 
@@ -105,17 +106,18 @@ def gather_meta(
     if cls is None:
         raise RecipeException(f"recipe not found: {name}")
 
+    if not probe_redistributable(recipes_root, name):
+        raise RecipeException(f"'{name}' is not redistributable")
+
+    profile = BuildProfile(build_type=build_type, target_os=target_os, target_arch=target_arch)
     version = resolve_version(cls)
-    package_id = compute_package_id(
-        cls, recipes_root, name, version, build_type, target_os, target_arch)
+    package_id = compute_package_id(cls, recipes_root, name, version, profile)
     staged = package_root(build_root, name, package_id) / "package"
     if not staged.is_dir() or not any(staged.iterdir()):
         raise RecipeException(
             f"package not built: {name}/{version} ({package_id}); run 'thirdparty build {name}' first")
 
-    probe = make_probe_recipe(
-        cls, recipes_root, name, version, build_type,
-        target_os=target_os, target_arch=target_arch)
+    probe = make_probe_recipe(cls, recipes_root, name, version, profile)
 
     # discover_requires drives the config phase (populating options + requires) best-effort.
     host_deps, _tool_deps = discover_requires(probe)
@@ -159,3 +161,19 @@ def gather_meta(
 
 def _opt_str(value: Any) -> "str | None":
     return None if value is None else str(value)
+
+
+def probe_redistributable(recipes_root: Path, name: str) -> bool:
+    """Whether *name* may be archived/published, from a lightweight package_info probe."""
+    cls = try_load_recipe_class(recipes_root, name)
+    if cls is None:
+        return True
+    try:
+        probe = make_probe_recipe(cls, recipes_root, name, resolve_version(cls))
+    except Exception:
+        return True
+    try:
+        probe.package_info()
+    except Exception:
+        pass  # recipes set info.redistributable first, before touching folders/deps
+    return probe.info.redistributable

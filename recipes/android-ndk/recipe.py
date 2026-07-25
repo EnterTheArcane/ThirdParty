@@ -3,6 +3,7 @@ from pathlib import Path
 import zipfile
 
 from thirdparty import RecipeBase
+from thirdparty._internal.model.settings import Settings
 from thirdparty.errors import RecipeInvalidConfiguration
 from thirdparty.files import copy, download, rm, unzip
 from thirdparty.scm import Version
@@ -24,16 +25,25 @@ class Recipe(RecipeBase):
     def latest_version(self):
         repo = GithubRepository(self, "android/ndk")
         return Version(repo.latest_release)
-    
+
     def validate(self):
-        if (self.settings.os, self._arch) not in _SOURCE_SHA256:
-            raise RecipeInvalidConfiguration(f"Unsupported os/arch")
+        if str(self.settings.os) != "Android":
+            raise RecipeInvalidConfiguration(f"{self.name} only supports Android targets")
+        if (self._host_os, self._host_arch) not in _SOURCE_SHA256:
+            raise RecipeInvalidConfiguration(
+                f"{self.name} has no NDK for a {self.settings_build.os}/{self.settings_build.arch} build machine")
+
+    def toolchain_settings(self, settings: Settings):
+        settings.compiler = "clang"
+        settings.compiler_libcxx = "c++_static"
+        if settings.os_api_level is None:
+            settings.os_api_level = "24"
 
     def source(self):
         self._unzip_fix_symlinks(
             url=f"https://dl.google.com/android/repository/android-ndk-{self.version}-{self._source_os}.zip",
             target_folder=self.folders.source,
-            sha256=_SOURCE_SHA256[(self.settings.os, self._arch)])
+            sha256=_SOURCE_SHA256[(self._host_os, self._host_arch)])
 
     def package(self):
         copy(self, "*", src=self.folders.source, dst=self.folders.package / "bin")
@@ -45,6 +55,7 @@ class Recipe(RecipeBase):
         rm(self, "Find*.cmake", self.folders.package / "bin", recursive=True)
 
     def package_info(self):
+        self.info.redistributable = False
         self.info.includedirs = []
         self.info.libdirs = []
 
@@ -63,11 +74,35 @@ class Recipe(RecipeBase):
         self.info.buildenv.define_path("READELF", self._tool_exe("llvm-readelf"))
         self.info.buildenv.define_path("ELFEDIT", self._tool_exe("llvm-elfedit"))
 
+        target = {
+            "ARM": "aarch64-linux-android",
+            "X64": "x86_64-linux-android",
+        }[str(self.settings.arch)]
+        api_level = self.settings.os_api_level or "24"
+        wrapper_ext = ".cmd" if self._host_os == "Windows" else ""
+        self.info.toolchain.family = "clang"
+        self.info.toolchain.front_kind = "clang"
+        self.info.toolchain.compilers = {
+            "c": str(self._toolchain_bin / f"{target}{api_level}-clang{wrapper_ext}"),
+            "cpp": str(self._toolchain_bin / f"{target}{api_level}-clang++{wrapper_ext}"),
+        }
+        self.info.toolchain.ar = str(self._tool_exe("llvm-ar"))
+        self.info.toolchain.ranlib = str(self._tool_exe("llvm-ranlib"))
+        self.info.toolchain.strip = str(self._tool_exe("llvm-strip"))
+        self.info.toolchain.nm = str(self._tool_exe("llvm-nm"))
+        self.info.toolchain.objcopy = str(self._tool_exe("llvm-objcopy"))
+        self.info.toolchain.target_triple = target
+        self.info.toolchain.cmake_toolchain_file = str(ndk_root / "build" / "cmake" / "android.toolchain.cmake")
+
     @property
-    def _arch(self):
-        if self.settings.os == "Mac":
+    def _host_os(self):
+        return str(self.settings_build.os)
+
+    @property
+    def _host_arch(self):
+        if self._host_os == "Mac":
             return "X64"
-        return str(self.settings.arch)
+        return str(self.settings_build.arch)
 
     @property
     def _host_tag(self):
@@ -79,14 +114,14 @@ class Recipe(RecipeBase):
             "Linux": "linux",
             "Mac": "darwin",
             "Windows": "windows",
-        }.get(str(self.settings.os))
+        }.get(self._host_os)
 
     @property
     def _toolchain_bin(self):
         return self.folders.package / "bin" / "toolchains" / "llvm" / "prebuilt" / self._host_tag / "bin"
 
     def _tool_exe(self, name: str):
-        suffix = ".exe" if self.settings.os == "Windows" else ""
+        suffix = ".exe" if self._host_os == "Windows" else ""
         return self._toolchain_bin / f"{name}{suffix}"
 
     def _fix_permissions(self):

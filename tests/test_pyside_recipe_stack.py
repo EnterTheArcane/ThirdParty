@@ -6,11 +6,23 @@ from thirdparty import RecipeBase
 from thirdparty._internal.graph import Graph
 from thirdparty._internal.loader import make_probe_recipe, resolve_version, try_load_recipe_class
 from thirdparty._internal.model.conf import Conf
+from thirdparty._internal.model.profile import BuildProfile
+from thirdparty._internal.toolchains import select_toolchain, toolchain_layer
 from thirdparty._internal.util.detect_api import detect_arch
 
 
 ROOT = Path(__file__).resolve().parents[1]
 RECIPES = ROOT / "recipes"
+
+
+def _layer(profile: BuildProfile) -> frozenset[str]:
+    return toolchain_layer(RECIPES, select_toolchain(profile, RECIPES), profile)
+
+
+def _declared(deps: "list[str]", layer: frozenset[str], keep: tuple[str, ...] = ()) -> "list[str]":
+    """Deps as declared by the recipes, without the machine-dependent auto-injected
+    toolchain layer (providers and their ingredients)."""
+    return [d for d in deps if d not in layer or d in keep]
 
 
 class PySideRecipeStackTests(unittest.TestCase):
@@ -23,46 +35,43 @@ class PySideRecipeStackTests(unittest.TestCase):
     def test_cross_dependency_boundaries(self):
         # Keep this a cross-build test on both x86_64 CI hosts and ARM64 developer machines.
         target_arch = "X64" if detect_arch() == "ARM" else "ARM"
-        graph = Graph.build(
-            RECIPES,
-            ["pyside", "shiboken", "shiboken-generator"],
-            "Release",
-            target_os="Linux",
-            target_arch=target_arch)
+        profile = BuildProfile(build_type="Release", target_os="Linux", target_arch=target_arch)
+        layer = _layer(profile)
+        graph = Graph.build(RECIPES, ["pyside", "shiboken", "shiboken-generator"], profile)
 
-        self.assertEqual(graph["pyside"].host_deps, ["cpython", "qt", "shiboken"])
+        self.assertEqual(_declared(graph["pyside"].host_deps, layer), ["cpython", "qt", "shiboken"])
         self.assertEqual(
-            graph["pyside"].tool_deps,
+            _declared(graph["pyside"].tool_deps, layer),
             ["cmake", "cpython", "shiboken-generator", "qt"])
         self.assertNotIn("pyside", graph["pyside"].all_deps)
 
-        self.assertEqual(graph["shiboken"].host_deps, ["cpython", "qt"])
+        self.assertEqual(_declared(graph["shiboken"].host_deps, layer), ["cpython", "qt"])
         self.assertEqual(
-            graph["shiboken"].tool_deps,
+            _declared(graph["shiboken"].tool_deps, layer),
             ["cmake", "cpython", "shiboken-generator", "qt"])
 
-        self.assertEqual(graph["shiboken-generator"].host_deps, [])
+        self.assertEqual(_declared(graph["shiboken-generator"].host_deps, layer), [])
+        # llvm IS declared by shiboken-generator (libclang), keep it visible.
         self.assertEqual(
-            graph["shiboken-generator"].tool_deps,
+            _declared(graph["shiboken-generator"].tool_deps, layer, keep=("llvm",)),
             ["cmake", "cpython", "llvm", "qt"])
 
     def test_native_recipes_do_not_add_host_qt_as_a_tool(self):
-        graph = Graph.build(
-            RECIPES,
-            ["pyside", "shiboken"],
-            "Release")
+        profile = BuildProfile(build_type="Release")
+        layer = _layer(profile)
+        graph = Graph.build(RECIPES, ["pyside", "shiboken"], profile)
 
         self.assertEqual(
-            graph["pyside"].tool_deps,
+            _declared(graph["pyside"].tool_deps, layer),
             ["cmake", "cpython", "shiboken-generator"])
         self.assertEqual(
-            graph["shiboken"].tool_deps,
+            _declared(graph["shiboken"].tool_deps, layer),
             ["cmake", "cpython", "shiboken-generator"])
 
     def test_qt_has_no_static_build_option_or_branch(self):
         recipe_class = self._recipe_class("qt")
         recipe = make_probe_recipe(
-            recipe_class, RECIPES, "qt", resolve_version(recipe_class), "Release")
+            recipe_class, RECIPES, "qt", resolve_version(recipe_class), BuildProfile(build_type="Release"))
         source = (RECIPES / "qt" / "recipe.py").read_text(encoding="utf-8")
 
         self.assertIsNone(recipe.options.get_safe("shared"))
@@ -88,7 +97,7 @@ class PySideRecipeStackTests(unittest.TestCase):
     def test_xkbcommon_exports_qt_expected_cmake_contract(self):
         recipe_class = self._recipe_class("xkbcommon")
         recipe = make_probe_recipe(
-            recipe_class, RECIPES, "xkbcommon", resolve_version(recipe_class), "Release")
+            recipe_class, RECIPES, "xkbcommon", resolve_version(recipe_class), BuildProfile(build_type="Release"))
         recipe.package_info()
 
         self.assertEqual(recipe.info.get_property("cmake_file_name"), "XKB")

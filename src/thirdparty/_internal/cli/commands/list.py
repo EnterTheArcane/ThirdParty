@@ -9,6 +9,7 @@ from colorama import Fore, Style
 from thirdparty._internal.cli.command import command
 from thirdparty._internal.graph import Node, Graph, is_built
 from thirdparty._internal.loader import make_probe_recipe, compute_package_id
+from thirdparty._internal.model.profile import BuildProfile
 from thirdparty.errors import RecipeInvalidConfiguration
 
 
@@ -23,11 +24,11 @@ def setup_parser(p: argparse.ArgumentParser) -> None:
         "--build-type", default="Release", choices=["Debug", "Release", "RelWithDebInfo"], dest="build_type", metavar="<type>", )
 
 
-def _is_incompatible(recipes_root: Path, node: Node, build_type: str) -> bool:
+def _is_incompatible(recipes_root: Path, node: Node, profile: BuildProfile) -> bool:
     if node.recipe_cls is None:
         return False
     try:
-        probe = make_probe_recipe(node.recipe_cls, recipes_root, node.name, node.version, build_type)
+        probe = make_probe_recipe(node.recipe_cls, recipes_root, node.name, node.version, profile)
     except Exception:
         return False
     if hasattr(probe, "configure"):
@@ -77,7 +78,8 @@ def list_recipes(args: argparse.Namespace) -> None:
         print("[thirdparty] no recipes matched", file=sys.stderr)
         sys.exit(1)
 
-    graph = Graph.build(recipes_root, names, args.build_type)
+    profile = BuildProfile(build_type=args.build_type)
+    graph = Graph.build(recipes_root, names, profile)
     order = graph.topo_order() if args.build_order else sorted(names)
 
     rows: list[tuple[str, str, bool, bool, list[str], list[str]]] = []
@@ -85,8 +87,8 @@ def list_recipes(args: argparse.Namespace) -> None:
     incompatible_count = 0
     for name in order:
         node = graph[name]
-        incompatible = _is_incompatible(recipes_root, node, args.build_type)
-        pkg_id = (compute_package_id(node.recipe_cls, recipes_root, name, node.version, args.build_type)
+        incompatible = _is_incompatible(recipes_root, node, profile)
+        pkg_id = (compute_package_id(node.recipe_cls, recipes_root, name, node.version, profile)
                   if node.recipe_cls and node.version != "?" else None)
         built = not incompatible and pkg_id is not None and is_built(build_root, name, node.version, pkg_id)
         built_count += built

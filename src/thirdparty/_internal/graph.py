@@ -1,6 +1,7 @@
 from graphlib import TopologicalSorter
 from pathlib import Path  # noqa: F401  (annotation only)
 
+from thirdparty._internal.model.profile import BuildProfile
 from thirdparty.recipe import RecipeBase
 
 
@@ -170,21 +171,24 @@ class Graph:
 
     @staticmethod
     def build(
-        recipes_root: Path, names: list[str], build_type: str, jobs: int | None = None, transitive: bool = False, target_os: str | None = None, target_arch: str | None = None, ) -> "Graph":
+        recipes_root: Path, names: list[str], profile: "BuildProfile | None" = None, jobs: int | None = None, transitive: bool = False, ) -> "Graph":
         """Resolve the dependencies of each recipe in ``names`` and return a graph.
 
         With ``transitive=False`` only the listed recipes become nodes.  With
         ``transitive=True`` the graph is expanded to the full transitive closure of the
         listed recipes (every reachable local dependency becomes a node too).
 
-        ``target_os``/``target_arch`` select the platform used for requirement discovery
-        (conditional ``requires`` may branch on ``settings.os``/``arch``).
+        ``profile`` selects the platform/toolchain used for requirement discovery
+        (conditional ``requires`` may branch on ``settings.os``/``arch``, and toolchain
+        injection depends on the selected provider).
 
         Recipes/deps that fail to load or probe are still included as nodes with no
         dependencies, so callers can report them rather than silently dropping them.
         """
         from thirdparty._internal.loader import (
             try_load_recipe_class, resolve_version, make_probe_recipe, )
+
+        profile = profile or BuildProfile()
 
         nodes: dict[str, Node] = {}
         queue: list[str] = list(names)
@@ -201,7 +205,7 @@ class Graph:
             version = resolve_version(cls)
             try:
                 probe = make_probe_recipe(
-                    cls, recipes_root, name, version, build_type, jobs=jobs, target_os=target_os, target_arch=target_arch)
+                    cls, recipes_root, name, version, profile, jobs=jobs)
                 host_deps, tool_deps = discover_requires(probe)
             except Exception:
                 host_deps, tool_deps = [], []

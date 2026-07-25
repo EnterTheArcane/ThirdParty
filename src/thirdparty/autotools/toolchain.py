@@ -6,10 +6,11 @@ from typing import Any, cast
 from thirdparty.apple.utils import is_apple_os, resolve_apple_flags, apple_extra_flags
 from thirdparty.build import cmd_args_to_string, save_toolchain_args
 from thirdparty.build.cross_building import cross_building
-from thirdparty.build.flags import architecture_flag, architecture_link_flag, build_type_flags, cppstd_flag, build_type_link_flags, libcxx_flags, cstd_flag, llvm_clang_front, threads_flags
+from thirdparty._internal.model.toolchain import find_toolchain
+from thirdparty.build.flags import architecture_flag, architecture_link_flag, build_type_flags, cppstd_flag, build_type_link_flags, libcxx_flags, cstd_flag, llvm_clang_front, lto_flags, threads_flags
 from thirdparty.env import Environment, VirtualBuildEnv
 from thirdparty.autotools.get_gnu_triplet import _get_gnu_triplet
-from thirdparty.microsoft import VCVars, msvc_runtime_flag, unix_path, check_min_vs, is_msvc
+from thirdparty.microsoft import msvc_runtime_flag, unix_path, check_min_vs, is_msvc
 from thirdparty.recipe import RecipeBase
 
 
@@ -159,6 +160,34 @@ class AutotoolsToolchain:
         self.apple_isysroot_flag = isysroot_flag
         self.apple_min_version_flag = min_flag
         self.apple_extra_flags = apple_extra_flags(self._recipe)
+
+        self._toolchain_contract = find_toolchain(recipe)
+        _tc = self._toolchain_contract
+        if _tc is not None:
+            if _tc.gcc_toolchain:
+                gcc_toolchain_flag = f"--gcc-toolchain={_tc.gcc_toolchain}"
+                self.extra_cflags.append(gcc_toolchain_flag)
+                self.extra_cxxflags.append(gcc_toolchain_flag)
+            if _tc.front_kind == "clang-cl":
+                # Explicit /imsvc + /libpath: rather than INCLUDE/LIB, which clang-cl and
+                # lld-link split on ';' even on POSIX build machines.
+                for d in _tc.msvc_include_dirs:
+                    self.extra_cflags.append(f"/imsvc{d}")
+                    self.extra_cxxflags.append(f"/imsvc{d}")
+                for d in _tc.msvc_lib_dirs:
+                    self.extra_ldflags.append(f"/libpath:{d}")
+            if _tc.apple_sysroot and not self.apple_isysroot_flag and is_apple_os(recipe):
+                self.apple_isysroot_flag = f"-isysroot {_tc.apple_sysroot}"
+            self.extra_cflags.extend(_tc.extra_cflags)
+            self.extra_cxxflags.extend(_tc.extra_cxxflags)
+            self.extra_ldflags.extend(_tc.extra_ldflags)
+            self.extra_defines.extend(_tc.extra_defines)
+
+        _lto = lto_flags(recipe)
+        if _lto:
+            self.extra_cflags.extend(_lto)
+            self.extra_cxxflags.extend(_lto)
+            self.extra_ldflags.extend([f for f in _lto if f.startswith("-flto")])
 
     def yes_no(
         self,
@@ -353,6 +382,23 @@ class AutotoolsToolchain:
                     env.define("OBJDUMP", ":")
                     env.define("RANLIB", ":")
                     env.define("STRIP", ":")
+            _tc = self._toolchain_contract
+            if _tc is not None:
+                if not compilers_by_conf:
+                    contract_compilers = {"c": "CC", "cpp": "CXX", "rc": "RC"}
+                    for comp, env_var in contract_compilers.items():
+                        if comp in _tc.compilers:
+                            env.define(env_var, cast(str, unix_path(self._recipe, _tc.compilers[comp])))
+                for env_var, exe in (
+                        ("AR", _tc.lib if _tc.front_kind in ("msvc", "clang-cl") else _tc.ar),
+                        ("RANLIB", _tc.ranlib), ("NM", _tc.nm), ("STRIP", _tc.strip),
+                        ("OBJCOPY", _tc.objcopy), ("LD", _tc.linker)):
+                    if exe:
+                        env.define(env_var, cast(str, unix_path(self._recipe, exe)))
+                if _tc.front_kind in ("msvc", "clang-cl"):
+                    for env_var in ("RANLIB", "STRIP"):
+                        if getattr(_tc, env_var.lower()) is None:
+                            env.define(env_var, ":")
 
         env.append("CPPFLAGS", [f"-D{d}" for d in self.defines])
         env.append("CXXFLAGS", self.cxxflags)
@@ -382,7 +428,7 @@ class AutotoolsToolchain:
         env_vars = env.vars(self._recipe, scope=scope)
         env_vars.save_script("autotoolstoolchain")
         self.generate_args()
-        VCVars(self._recipe).generate(scope=scope)
+        VirtualBuildEnv(self._recipe).generate(scope=scope)
 
     def _default_configure_shared_flags(self) -> list[str]:
         args: list[str] = []

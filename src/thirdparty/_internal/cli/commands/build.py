@@ -4,8 +4,10 @@ import os
 import sys
 import time
 from collections import OrderedDict
+from dataclasses import replace
 from multiprocessing import cpu_count
 from pathlib import Path
+from typing import Any, cast
 
 from thirdparty._internal.cli.command import command
 from thirdparty._internal.cli import output as _out
@@ -18,11 +20,15 @@ from thirdparty._internal.methods import run_configure_method as _run_configure_
 from thirdparty._internal.model.conf import Conf
 from thirdparty._internal.model.dependencies import RecipeDependencies
 from thirdparty._internal.model.info import Info
+from thirdparty._internal.model.profile import BuildProfile
 from thirdparty._internal.model.recipe import RecipeBase
 from thirdparty._internal.model.refs import RecipeReference
 from thirdparty._internal.model.requires import Requirement
 from thirdparty._internal.model.state import RecipeState
-from thirdparty._internal.util.detect import detect_settings, detect_platform_tag
+from thirdparty._internal.model.toolchain import find_toolchain as _find_toolchain
+from thirdparty._internal.toolchains import (
+    resolve_settings as _resolve_settings, select_toolchain as _select_toolchain, )
+from thirdparty._internal.util.detect import detect_platform_tag
 from thirdparty._internal.util.files import rmdir as _rmdir
 from thirdparty.env.environment import generate_aggregated_env
 from thirdparty.errors import RecipeException
@@ -57,6 +63,14 @@ def setup_parser(p: argparse.ArgumentParser) -> None:
         "--target-arch", default=None, dest="target_arch", metavar="<arch>", help="Cross-compile target architecture (X64 or ARM); "
                                                                                   "default: build machine")
     p.add_argument(
+        "--compiler", default=None, dest="compiler", metavar="<toolchain>",
+        help="Toolchain provider recipe: clang (hermetic clang from the llvm package), "
+             "msvc (hermetic packaged MSVC), apple-clang (Xcode), gcc (system gcc). "
+             "Default: auto-select the first toolchain recipe supporting the target. "
+             "Ignored for Android targets (the NDK toolchain is always used). "
+             "NOTE: the compiler does not change the package folder; switching "
+             "compilers requires --force/--clean.")
+    p.add_argument(
         "--dry-run", action="store_true", help="Print build plan without building")
     p.add_argument(
         "--force", "--clean", action="store_true", dest="force", help="Rebuild even if already built (wipe source/build/package first)")
@@ -85,6 +99,7 @@ def build(args: argparse.Namespace) -> None:
     fail_fast: bool = getattr(args, "fail_fast", False)
     target_os: str | None = getattr(args, "target_os", None)
     target_arch: str | None = getattr(args, "target_arch", None)
+    compiler: str | None = getattr(args, "compiler", None)
     exact: bool = getattr(args, "exact", False)
 
     cwd = Path.cwd()
@@ -94,6 +109,21 @@ def build(args: argparse.Namespace) -> None:
     if not recipes_root.exists():
         _out.error(f"no 'recipes/' directory in {cwd}")
         sys.exit(1)
+
+    # Resolve the toolchain up-front: surfaces --compiler errors before any graph work and
+    # pins the auto-selected provider so the whole invocation uses one deterministic choice.
+    # Auto-selection finding nothing is a warning, not an error: recipe trees without
+    # toolchain recipes (download-only packages) still build; anything needing a compiler
+    # fails in its own build with the real cause. An explicit --compiler must resolve.
+    profile = BuildProfile(
+        build_type=build_type, target_os=target_os, target_arch=target_arch, compiler=compiler)
+    try:
+        profile = replace(profile, compiler=_select_toolchain(profile, recipes_root))
+    except RecipeException as exc:
+        if compiler is not None:
+            _out.error(str(exc))
+            sys.exit(1)
+        _out.warn(f"no toolchain recipe available; building without one ({exc})")
 
     all_names = sorted(d.name for d in recipes_root.iterdir() if d.is_dir() and (d / "recipe.py").exists())
     all_names_set = set(all_names)
@@ -128,10 +158,10 @@ def build(args: argparse.Namespace) -> None:
     # machine; see _build_recipe / _build_dep_graph for the host-vs-build split.
     if is_multi or resume or dry_run:
         _build_ordered(
-            recipes_root, build_root, names, build_type, jobs=args.jobs, resume=resume, dry_run=dry_run, force=force, generate_only=generate_only, fail_fast=fail_fast, target_os=target_os, target_arch=target_arch, exact_set=exact_set, verbose=verbose, )
+            recipes_root, build_root, names, profile, jobs=args.jobs, resume=resume, dry_run=dry_run, force=force, generate_only=generate_only, fail_fast=fail_fast, exact_set=exact_set, verbose=verbose, )
     else:
         _build_recipe(
-            recipes_root, build_root, names[0], build_type, set(), jobs=args.jobs, generate_only=generate_only, force=force, target_os=target_os, target_arch=target_arch, exact_set=exact_set, verbose=verbose)
+            recipes_root, build_root, names[0], profile, set(), jobs=args.jobs, generate_only=generate_only, force=force, exact_set=exact_set, verbose=verbose)
 
 
 def _load_recipe_class(recipes_root: Path, name: str) -> type[RecipeBase]:
@@ -149,9 +179,9 @@ def _load_recipe_class(recipes_root: Path, name: str) -> type[RecipeBase]:
 
 
 def _instantiate(
-    recipe_cls: type[RecipeBase], recipes_root: Path, build_root: Path, name: str, version: str, build_type: str, target_os: str | None, target_arch: str | None, jobs: int | None = None, verbose: bool = False, ) -> RecipeBase:
+    recipe_cls: type[RecipeBase], recipes_root: Path, build_root: Path, name: str, version: str, profile: BuildProfile, jobs: int | None = None, verbose: bool = False, ) -> RecipeBase:
     recipe = make_probe_recipe(
-        recipe_cls, recipes_root, name, version, build_type, jobs=jobs, target_os=target_os, target_arch=target_arch, verbose=verbose)
+        recipe_cls, recipes_root, name, version, profile, jobs=jobs, verbose=verbose)
 
     pkg_root = _package_root(build_root, name, _resolve_package_id(recipe))
     source_dir = str(pkg_root / "source")
@@ -171,9 +201,7 @@ def _build_dep_graph(
     recipes_root: Path,
     build_root: Path,
     dep_names: list[str],
-    build_type: str,
-    target_os: str | None,
-    target_arch: str | None,
+    profile: BuildProfile,
     jobs: int | None = None,
     verbose: bool = False,
     tool_names: list[str] | None = None,
@@ -181,8 +209,9 @@ def _build_dep_graph(
     """Create a RecipeDependencies from a list of already-built packages.
 
     dep_names  - host (non-build) deps (build=False); inherit the parent's effective
-                 target platform (``target_os``/``target_arch``).
-    tool_names - requires_tool (build=True); built for the BUILD MACHINE (target reset).
+                 target platform (``profile``).
+    tool_names - requires_tool (build=True); built for the BUILD MACHINE (target reset,
+                 same toolchain choice).
 
     _recipe_cache is a shared dict[(dep_name, os, arch, is_build) → (Requirement, RecipeBase)]
     passed through recursive calls so that the *same* RecipeBase object is reused
@@ -202,8 +231,8 @@ def _build_dep_graph(
     def _add_dep(dep_name: str, is_build: bool, direct: bool = True) -> None:
         # Host deps inherit the parent's target; requires_tool (build context) reset to the
         # build machine.  Effective target fully determines the dep's settings + output folder.
-        dep_os = None if is_build else target_os
-        dep_arch = None if is_build else target_arch
+        dep_profile = profile.build_machine() if is_build else profile
+        dep_os, dep_arch = dep_profile.target_os, dep_profile.target_arch
         cache_key = (dep_name, dep_os, dep_arch, is_build)
         # If we already created a recipe for this dep+platform, reuse it.
         # This ensures object identity holds across all levels (needed by transitive_requires).
@@ -241,11 +270,11 @@ def _build_dep_graph(
         dep.version = dep_version
         dep.folders.set_recipe(recipes_root / dep_name)
 
-        dep_settings = detect_settings(build_type, dep_os, dep_arch)
-        if dep_os is None and dep_arch is None:
+        dep_settings = _resolve_settings(dep_profile, recipes_root)
+        if not dep_profile.is_cross:
             dep_settings_build = dep_settings
         else:
-            dep_settings_build = detect_settings(build_type)
+            dep_settings_build = _resolve_settings(dep_profile.build_machine(), recipes_root)
         conf = Conf()
         conf.tools.build.jobs = jobs if jobs is not None else cpu_count()
         conf.tools.cmake.configure_args = []
@@ -312,7 +341,7 @@ def _build_dep_graph(
             _sub_host = [str(r.name) for r in dep._requires if not r.build]
             _sub_tools = [str(r.name) for r in dep._requires if r.build]
             dep._state.dependencies = _build_dep_graph(
-                recipes_root, build_root, _sub_host, build_type, dep_os, dep_arch, jobs=jobs, verbose=verbose, tool_names=_sub_tools, _recipe_cache=_recipe_cache, )
+                recipes_root, build_root, _sub_host, dep_profile, jobs=jobs, verbose=verbose, tool_names=_sub_tools, _recipe_cache=_recipe_cache, )
         except Exception:
             dep._state.dependencies = RecipeDependencies(OrderedDict())
 
@@ -371,19 +400,16 @@ def _build_ordered(
     recipes_root: Path,
     build_root: Path,
     names: list[str],
-    build_type: str,
+    profile: BuildProfile,
     jobs: int | None,
     resume: str | None,
     dry_run: bool,
     force: bool,
     generate_only: bool,
-    target_os: str | None,
-    target_arch: str | None,
     fail_fast: bool = False,
     exact_set: set[str] | None = None,
     verbose: bool = False, ) -> None:
-    rgraph = _Graph.build(
-        recipes_root, names, build_type, jobs=jobs, transitive=True, target_os=target_os, target_arch=target_arch)
+    rgraph = _Graph.build(recipes_root, names, profile, jobs=jobs, transitive=True)
     order = rgraph.topo_order()
 
     if resume:
@@ -396,29 +422,28 @@ def _build_ordered(
     # builds for the target.  (When not cross-compiling these are the same platform.)
     build_only = _build_only_tools(rgraph)
 
-    def _node_target(name: str) -> tuple[str | None, str | None]:
-        return (None, None) if name in build_only else (target_os, target_arch)
+    def _node_profile(name: str) -> BuildProfile:
+        return profile.build_machine() if name in build_only else profile
 
-    cross = bool(target_os or target_arch)
-    label = f"{build_type}"
-    if cross:
-        label += f" -> {detect_platform_tag(target_os, target_arch)}"
+    label = f"{profile.build_type} [{profile.compiler}]"
+    if profile.is_cross:
+        label += f" -> {detect_platform_tag(profile.target_os, profile.target_arch)}"
     if exact_set is not None:
         label += "  [exact]"
     _out.info(f"\n=== Build Plan: {len(order)} recipes ({label}) ===")
     for i, name in enumerate(order, 1):
         node = rgraph[name]
         version = node.version
-        n_to, n_ta = _node_target(name)
+        n_profile = _node_profile(name)
         _cls = node.recipe_cls or _try_load_recipe_class(recipes_root, name)
-        n_id = (_compute_package_id(_cls, recipes_root, name, version, build_type, n_to, n_ta)
-                if _cls else detect_platform_tag(n_to, n_ta))
+        n_id = (_compute_package_id(_cls, recipes_root, name, version, n_profile)
+                if _cls else detect_platform_tag(n_profile.target_os, n_profile.target_arch))
         built = _is_built(build_root, name, version, n_id)
         if exact_set is not None and name not in exact_set:
             status = "[ref-only]"
         else:
             status = "[force]" if force else ("[built]" if built else "[pending]")
-        ctx = "" if not cross else f"  ({n_id})"
+        ctx = "" if not profile.is_cross else f"  ({n_id})"
         _out.info(f"  {i:3d}. {name}/{version}  {status}{ctx}")
 
     if dry_run:
@@ -449,8 +474,8 @@ def _build_ordered(
             _skip(name, "cannot load recipe", blocks_dependants=True)
             continue
         version = _resolve_version(cls)
-        n_to, n_ta = _node_target(name)
-        n_id = _compute_package_id(cls, recipes_root, name, version, build_type, n_to, n_ta)
+        n_profile = _node_profile(name)
+        n_id = _compute_package_id(cls, recipes_root, name, version, n_profile)
         # --exact: only build the explicitly named recipes; the rest are graph context only
         # and must never be built, wiped, or touched here.
         if exact_set is not None and name not in exact_set:
@@ -469,7 +494,7 @@ def _build_ordered(
         t0 = time.time()
         try:
             _build_recipe(
-                recipes_root, build_root, name, build_type, visited, n_to, n_ta, jobs=jobs, generate_only=generate_only, force=force, exact_set=exact_set, verbose=verbose)
+                recipes_root, build_root, name, n_profile, visited, jobs=jobs, generate_only=generate_only, force=force, exact_set=exact_set, verbose=verbose)
             elapsed = time.time() - t0
             results.append((name, version, elapsed, None))
         except Exception as exc:
@@ -511,10 +536,8 @@ def _build_recipe(
     recipes_root: Path,
     build_root: Path,
     name: str,
-    build_type: str,
+    profile: BuildProfile,
     visited: set[tuple[str, str]],
-    target_os: str | None,
-    target_arch: str | None,
     jobs: int | None = None,
     generate_only: bool = False,
     force: bool = False,
@@ -522,9 +545,10 @@ def _build_recipe(
     verbose: bool = False, ) -> list[str]:
     """Build *name* and all its transitive dependencies.
 
-    ``target_os``/``target_arch`` are this recipe's *effective* target platform (the host
-    context).  Tool dependencies (build context) are built for the BUILD MACHINE by resetting
-    the target to ``(None, None)``; regular host dependencies inherit this recipe's target.
+    ``profile`` carries this recipe's *effective* target platform (the host context) and
+    the toolchain choice.  Tool dependencies (build context) are built for the BUILD
+    MACHINE via ``profile.build_machine()`` (target reset, toolchain kept); regular host
+    dependencies inherit this recipe's profile.
 
     ``exact_set`` (``--exact``): when not ``None``, only recipes whose name is in this set are
     actually built.  Every other recipe is still walked to resolve the dependency graph (so
@@ -536,8 +560,7 @@ def _build_recipe(
     """
     recipe_cls = _load_recipe_class(recipes_root, name)
     version = _resolve_version(recipe_cls)
-    package_id = _compute_package_id(
-        recipe_cls, recipes_root, name, version, build_type, target_os, target_arch)
+    package_id = _compute_package_id(recipe_cls, recipes_root, name, version, profile)
 
     # visited is keyed by (name, package_id) so a recipe builds once per distinct output
     # identity (universal deps collapse across targets; self-tool cross-compile still twice).
@@ -549,14 +572,14 @@ def _build_recipe(
     # Probe the recipe to discover its direct dependencies (even when pre-built,
     # so we can return the correct transitive dep list to our caller).
     probe = _instantiate(
-        recipe_cls, recipes_root, build_root, name, version, build_type, target_os, target_arch, jobs=jobs, verbose=verbose)
+        recipe_cls, recipes_root, build_root, name, version, profile, jobs=jobs, verbose=verbose)
     direct_deps, direct_tools = _get_requires(probe)
 
     # Recursively build tool dependencies that have local recipes - for the BUILD MACHINE.
     for tool_name in direct_tools:
         if (recipes_root / tool_name / "recipe.py").exists():
             _build_recipe(
-                recipes_root, build_root, tool_name, build_type, visited, None, None, jobs=jobs, generate_only=generate_only, force=force, exact_set=exact_set, verbose=verbose)
+                recipes_root, build_root, tool_name, profile.build_machine(), visited, jobs=jobs, generate_only=generate_only, force=force, exact_set=exact_set, verbose=verbose)
 
     # Recursively build deps (inheriting this recipe's target) and collect their dep lists.
     transitive: list[str] = []
@@ -565,7 +588,7 @@ def _build_recipe(
             _out.warn(f"dep recipe not found, skipping: {dep_name}")
             continue
         sub = _build_recipe(
-            recipes_root, build_root, dep_name, build_type, visited, target_os, target_arch, jobs=jobs, generate_only=generate_only, force=force, exact_set=exact_set, verbose=verbose)
+            recipes_root, build_root, dep_name, profile, visited, jobs=jobs, generate_only=generate_only, force=force, exact_set=exact_set, verbose=verbose)
         for d in sub:
             if d not in transitive:
                 transitive.append(d)
@@ -590,12 +613,12 @@ def _build_recipe(
 
     # Build the dependency graph for this recipe from all transitive deps.
     dep_graph = _build_dep_graph(
-        recipes_root, build_root, transitive, build_type, target_os, target_arch, jobs=jobs, verbose=verbose, tool_names=direct_tools)
+        recipes_root, build_root, transitive, profile, jobs=jobs, verbose=verbose, tool_names=direct_tools)
 
-    _out.group_start(f"Building {name}/{version} ({build_type})")
+    _out.group_start(f"Building {name}/{version} ({profile.build_type})")
 
     recipe = _instantiate(
-        recipe_cls, recipes_root, build_root, name, version, build_type, target_os, target_arch, jobs=jobs, verbose=verbose)
+        recipe_cls, recipes_root, build_root, name, version, profile, jobs=jobs, verbose=verbose)
     recipe._state.dependencies = dep_graph
 
     # Propagate conf from tool dependency info into recipe.conf so that, e.g.,
@@ -605,6 +628,15 @@ def _build_recipe(
             dep_conf = _dep_iface.info.conf
             if dep_conf:
                 recipe.conf.compose_conf(dep_conf)
+
+    # Seed the generic compiler/sysroot conf from the toolchain contract so generators
+    # that only understand conf (meson/premake/nmake, cmake-presets) keep working.
+    _tc = _find_toolchain(recipe)
+    if _tc is not None and not _tc.cmake_toolchain_file:
+        if not recipe.conf.tools.build.compiler_executables and _tc.compilers:
+            recipe.conf.tools.build.compiler_executables = cast("dict[Any, Any]", dict(_tc.compilers))
+        if not recipe.conf.tools.build.sysroot and _tc.sysroot:
+            recipe.conf.tools.build.sysroot = _tc.sysroot
 
     pkg_dir = Path(recipe.folders.package)
     build_dir = Path(recipe.folders.build)

@@ -107,6 +107,8 @@ class Recipe(RecipeBase[_Options]):
             self.requires("xz")
         if not is_msvc(self) and not self.conf.tools.gnu.pkg_config:
             self.requires_tool("pkgconf")
+        if self.settings.os == "Windows":
+            self.requires_tool("msbuild")
         # When cross-compiling, the freshly built Python cannot run on the build host. CPython's
         # Unix configure needs a build Python, and the Windows package layout step needs one too.
         if cross_building(self):

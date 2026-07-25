@@ -59,6 +59,7 @@ class Recipe(RecipeBase):
                 copy(self, "*", src=src, dst=dst)
 
     def package_info(self):
+        self.info.redistributable = False
         # Empty libdirs keeps the bundled libc++ off the dynamic loader path, where other
         # tools running under the same env (ninja, cmake) would load it and crash.
         self.info.libdirs = []
