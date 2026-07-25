@@ -65,6 +65,7 @@ jobs:
         timeout-minutes: 330
         run: >-
           thirdparty build
+          --compiler apple-clang
           --target-arch ${{ inputs.arch }}
           ${{ inputs.recipes }}
 
