@@ -164,8 +164,8 @@ class MesonToolchain:
         if compiler is None:
             raise RecipeException("MesonToolchain needs 'settings.compiler', but it is not defined")
         compiler_version = self._recipe.settings.compiler_version
-        if compiler_version is None:
-            raise RecipeException("MesonToolchain needs 'settings.compiler_version', but it is not defined")
+        if compiler == "msvc" and compiler_version is None:
+            raise RecipeException("MesonToolchain needs 'settings.compiler_version' for the msvc compiler, but it is not defined")
 
         cppstd = self._recipe.settings.compiler_cxx_standard
         cstd = self._recipe.settings.compiler_c_standard

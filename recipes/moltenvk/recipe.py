@@ -16,7 +16,7 @@ class _Options(RecipeOptions):
 
 class Recipe(RecipeBase[_Options]):
     name = "moltenvk"
-    version = "1.4.2"
+    version = "1.4.1"
     license = "Apache-2.0"
 
     def latest_version(self):
@@ -44,7 +44,7 @@ class Recipe(RecipeBase[_Options]):
         get(
             self,
             url=f"https://github.com/KhronosGroup/MoltenVK/archive/refs/tags/v{self.version}.tar.gz",
-            sha256="6864db532f1dbbdb621a8d0ec13f24edae318fd9269dd3dd0cdff791334bb1cb",
+            sha256="9985f141902a17de818e264d17c1ce334b748e499ee02fcb4703e4dc0038f89c",
             destination=self.folders.source,
             strip_root=True)
 
