@@ -254,16 +254,6 @@ class Recipe(RecipeBase[_Options]):
                 "pathBuf.append(\"/\", localError); pathBuf.append(arg, localError);",
                 strict=False)
 
-        # relocatable shared libs on macOS
-        if self.settings.os == "Mac":
-            mh_darwin = self.folders.source / "source" / "config" / "mh-darwin"
-            replace_in_file(self, mh_darwin, "-install_name $(libdir)/$(notdir", "-install_name @rpath/$(notdir")
-            replace_in_file(
-                self,
-                mh_darwin,
-                "-install_name $(notdir $(MIDDLE_SO_TARGET)) $(PKGDATA_TRAILING_SPACE)",
-                "-install_name @rpath/$(notdir $(MIDDLE_SO_TARGET))")
-
         # workaround for https://unicode-org.atlassian.net/browse/ICU-20531
         mkdir(self, self.folders.build / "data" / "out" / "tmp")
 

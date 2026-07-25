@@ -5,7 +5,7 @@ from thirdparty.env import VirtualBuildEnv, VirtualRunEnv
 from thirdparty.files import get, chdir, copy, apply_patches, mkdir, rename, replace_in_file
 from thirdparty.autotools import AutotoolsToolchain, Autotools
 from thirdparty.nmake import NMakeDeps, NMakeToolchain
-from thirdparty.microsoft import VCVars, is_msvc
+from thirdparty.microsoft import is_msvc
 from thirdparty.shell import run
 from thirdparty.scm import Version, WebReleaseIndex
 
@@ -45,9 +45,6 @@ class Recipe(RecipeBase[_Options]):
 
     def generate(self):
         if is_msvc(self):
-            vcvars = VCVars(self)
-            vcvars.generate()
-
             deps = NMakeDeps(self)
             deps.generate()
 

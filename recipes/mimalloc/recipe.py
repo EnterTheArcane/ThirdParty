@@ -4,7 +4,7 @@ from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeToolchain
 from thirdparty.env import VirtualBuildEnv
 from thirdparty.files import apply_patches, get, copy, rm, rmdir, replace_in_file, collect_libs
-from thirdparty.microsoft import is_msvc, VCVars
+from thirdparty.microsoft import is_msvc
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -79,10 +79,6 @@ class Recipe(RecipeBase[_Options]):
         tc.generate()
 
         VirtualBuildEnv(self).generate(scope="build")
-
-        if is_msvc(self):
-            vcvars = VCVars(self)
-            vcvars.generate()
 
     def build(self):
         apply_patches(self)
