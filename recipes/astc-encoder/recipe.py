@@ -1,9 +1,8 @@
 from typing import Literal
 
 from thirdparty import RecipeBase, RecipeOptions
-from thirdparty.build import cross_building
 from thirdparty.cmake import CMake, CMakeToolchain
-from thirdparty.files import copy, get, rmdir, replace_in_file
+from thirdparty.files import apply_patches, copy, get, replace_in_file
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -26,9 +25,11 @@ class Recipe(RecipeBase[_Options]):
     def configure(self):
         if self.settings.arch in ["ARM"]:
             self.options.isa = "neon"
-        elif str(self.options.isa) == "native" and cross_building(self):
-            # A cross compiler cannot resolve -march=native; use a portable x86-64 SIMD baseline.
-            self.options.isa = "sse4.1"
+        elif str(self.options.isa) == "native":
+            # -march=native tunes the library to whichever machine happened to build it, which is
+            # wrong for a redistributable package (and a cross compiler cannot resolve it at all).
+            # Pin the x86-64 SIMD baseline instead.
+            self.options.isa = "avx2"
 
     def requirements(self):
         self.requires_tool("cmake")
@@ -40,6 +41,7 @@ class Recipe(RecipeBase[_Options]):
             sha256="c77b4505792b36068b8ab5c548f606f8504f170e274e5870d3c5a405fe0bbc35",
             destination=self.folders.source,
             strip_root=True)
+        apply_patches(self)
         # astc-encoder wraps /W4 in a genex the toolchain warning filter preserves; empty it so
         # the quiet -w wins without cl's D9025 spam.
         replace_in_file(
@@ -50,12 +52,14 @@ class Recipe(RecipeBase[_Options]):
         tc = CMakeToolchain(self)
         tc.variables["ASTCENC_CLI"] = False
         tc.variables["ASTCENC_WERROR"] = False
-        isa = str(self.options.isa)
-        tc.variables["ASTCENC_ISA_AVX2"] = isa == "avx2"
-        tc.variables["ASTCENC_ISA_SSE41"] = isa == "sse4.1"
-        tc.variables["ASTCENC_ISA_SSE2"] = isa == "sse2"
-        tc.variables["ASTCENC_ISA_NEON"] = isa == "neon"
-        tc.variables["ASTCENC_ISA_NONE"] = isa == "none"
+        tc.variables["ASTCENC_SHAREDLIB"] = self.options.shared
+        tc.variables["ASTCENC_UNIVERSAL_BUILD"] = False
+        tc.variables["ASTCENC_ISA_AVX2"] = self.options.isa == "avx2"
+        tc.variables["ASTCENC_ISA_SSE41"] = self.options.isa == "sse4.1"
+        tc.variables["ASTCENC_ISA_SSE2"] = self.options.isa == "sse2"
+        tc.variables["ASTCENC_ISA_NEON"] = self.options.isa == "neon"
+        tc.variables["ASTCENC_ISA_NONE"] = self.options.isa == "none"
+        tc.variables["ASTCENC_ISA_NATIVE"] = self.options.isa == "native"
         tc.generate()
 
     def build(self):
@@ -67,11 +71,8 @@ class Recipe(RecipeBase[_Options]):
         copy(self, "LICENSE.txt", src=self.folders.source, dst=self.folders.package / "licenses")
         cmake = CMake(self)
         cmake.install()
-        rmdir(self, self.folders.package / "lib" / "cmake")
 
     def package_info(self):
-        isa = str(self.options.isa)
-        suffix = "-static" if not self.options.shared else ""
-        self.info.libs = [f"astcenc-{isa}{suffix}"]
+        self.info.libs = [f"astcenc-{self.options.isa}"]
         if self.settings.os in ["Linux", "FreeBSD"]:
             self.info.system_libs.extend(["m", "pthread"])

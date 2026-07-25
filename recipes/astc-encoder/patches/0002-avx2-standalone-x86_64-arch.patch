@@ -1,0 +1,14 @@
+--- Source/CMakeLists.txt
++++ Source/CMakeLists.txt
+@@ -53,6 +53,10 @@
+         elseif(${ASTCENC_ISA_SIMD} MATCHES "sse4.1")
+            set(CMAKE_OSX_ARCHITECTURES x86_64)
+         elseif(${ASTCENC_ISA_SIMD} MATCHES "avx2")
+-           set(CMAKE_OSX_ARCHITECTURES x86_64h)
++           if(${ASTCENC_UNIVERSAL_BUILD})
++              set(CMAKE_OSX_ARCHITECTURES x86_64h)
++           else()
++              set(CMAKE_OSX_ARCHITECTURES x86_64)
++           endif()
+         elseif(${ASTCENC_ISA_SIMD} MATCHES "none")
+            # Using "none" uses implicit architecture

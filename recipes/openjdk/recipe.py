@@ -57,15 +57,16 @@ class Recipe(RecipeBase):
             strip_root=True)
 
     def package(self):
-        symlinks.remove_broken_symlinks(self, str(self._jdk_home))
+        jdk_home = self._jdk_home
+        symlinks.remove_broken_symlinks(self, str(jdk_home))
 
-        copy(self, "*", src=self._jdk_home / "bin", dst=self.folders.package / "bin")
-        copy(self, "*", src=self._jdk_home / "include", dst=self.folders.package / "include")
-        copy(self, "*", src=self._jdk_home / "lib", dst=self.folders.package / "lib")
-        copy(self, "*", src=self._jdk_home / "jmods", dst=self.folders.package / "lib" / "jmods")
-        copy(self, "*", src=self._jdk_home / "conf", dst=self.folders.package / "conf")
-        copy(self, "*", src=self._jdk_home / "legal", dst=self.folders.package / "licenses")
-        copy(self, "release", src=self._jdk_home, dst=self.folders.package, keep_path=False)
+        copy(self, "*", src=jdk_home / "bin", dst=self.folders.package / "bin")
+        copy(self, "*", src=jdk_home / "include", dst=self.folders.package / "include")
+        copy(self, "*", src=jdk_home / "lib", dst=self.folders.package / "lib")
+        copy(self, "*", src=jdk_home / "jmods", dst=self.folders.package / "lib" / "jmods")
+        copy(self, "*", src=jdk_home / "conf", dst=self.folders.package / "conf")
+        copy(self, "*", src=jdk_home / "legal", dst=self.folders.package / "licenses")
+        copy(self, "release", src=jdk_home, dst=self.folders.package, keep_path=False)
 
         if self.settings.os == "Windows":
             for runtime_dll in ("msvcp140.dll", "vcruntime140.dll", "vcruntime140_1.dll"):
@@ -85,9 +86,17 @@ class Recipe(RecipeBase):
 
     @property
     def _jdk_home(self) -> Path:
+        root = self.folders.build
         if self.settings.os == "Mac":
-            return self.folders.build / "Contents" / "Home"
-        return self.folders.build
+            # Every entry in the macOS tarball is prefixed with "./". That leading entry makes strip_root pick "." as the common folder,
+            # so it strips "./" and leaves the "jdk-<version>.jdk" bundle directory behind. 
+            # conan-centers openjdk recipe hardcodes the bundle name for exactly this reason.
+            # Globbing keeps this correct if the bundle is renamed or the strip is ever fixed.
+            bundle = next(iter(sorted(root.glob("*.jdk"))), None)
+            if bundle is not None:
+                root = bundle
+            return root / "Contents" / "Home"
+        return root
 
     @property
     def _source(self) -> dict[str, str]:

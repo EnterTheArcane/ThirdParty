@@ -1,0 +1,22 @@
+--- Source/cmake_core.cmake
++++ Source/cmake_core.cmake
+@@ -538,6 +538,19 @@
+             ${CMAKE_CURRENT_BINARY_DIR})
+
+     if(NOT ${ASTCENC_UNIVERSAL_BUILD})
+         install(TARGETS ${ASTCENC_TARGET})
+     endif()
+ endif()
++
++if(${ASTCENC_SHAREDLIB})
++    set_target_properties(${ASTCENC_TARGET}-shared PROPERTIES OUTPUT_NAME ${ASTCENC_TARGET})
++else()
++    set_target_properties(${ASTCENC_TARGET}-static PROPERTIES OUTPUT_NAME ${ASTCENC_TARGET})
++endif()
++
++if(NOT ${ASTCENC_UNIVERSAL_BUILD})
++    if(NOT ${ASTCENC_SHAREDLIB})
++        install(TARGETS ${ASTCENC_TARGET}-static)
++    endif()
++    install(FILES astcenc.h DESTINATION include)
++endif()
