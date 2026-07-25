@@ -8,7 +8,7 @@ from thirdparty.scm.github import GithubRepository
 
 class Recipe(RecipeBase):
     name = "rive-runtime"
-    version = "0.1.212"
+    version = "0.1.215"
     license = "MIT"
 
     def latest_version(self):
@@ -22,7 +22,7 @@ class Recipe(RecipeBase):
         get(
             self,
             url=f"https://github.com/rive-app/rive-runtime/archive/refs/tags/runtime-v{self.version}.tar.gz",
-            sha256="32285e9d40e502b293f6b2766e7fbf03c8135290190f7b9413c1c622ba025a87",
+            sha256="f3eeba21b5a56b0a7b3cebf68f89e9ef7299e27a0feb734a19441edebfa9ccd8",
             destination=self.folders.source,
             strip_root=True)
 

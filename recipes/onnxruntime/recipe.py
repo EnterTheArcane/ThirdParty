@@ -28,7 +28,7 @@ class _Options(RecipeOptions):
 
 class Recipe(RecipeBase[_Options]):
     name = "onnxruntime"
-    version = "1.27.1"
+    version = "1.28.0"
     license = "MIT"
 
     def latest_version(self):
@@ -75,7 +75,7 @@ class Recipe(RecipeBase[_Options]):
         get(
             self,
             url=f"https://github.com/microsoft/onnxruntime/archive/refs/tags/v{self.version}.tar.gz",
-            sha256="e53b06ccd454f56088fde374d1af6660ef111ca7ce7a98d62b274ff9094d3005",
+            sha256="9616cbdbbfcb1420b3261cd280a047d74ab0a249825e577b0e2dd310e22f6b83",
             destination=self.folders.source,
             strip_root=True)
         # Replace onnxruntime's FetchContent dependency logic with find_package(... CONFIG).

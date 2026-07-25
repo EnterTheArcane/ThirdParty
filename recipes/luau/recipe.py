@@ -7,7 +7,7 @@ from thirdparty.scm.github import GithubRepository
 
 class Recipe(RecipeBase):
     name = "luau"
-    version = "0.730"
+    version = "0.731"
     license = "MIT"
 
     def latest_version(self):
@@ -21,7 +21,7 @@ class Recipe(RecipeBase):
         get(
             self,
             url=f"https://github.com/luau-lang/luau/archive/{self.version}.tar.gz",
-            sha256="448d720df65d393f4c61c7d2b2ddde8c772de55c23760603a9ada43a752aef70",
+            sha256="c5cd8883a49b99170d66c6e791aacb8d15e1d96c3690b0eb5dde2b0037ac0733",
             destination=self.folders.source,
             strip_root=True)
 

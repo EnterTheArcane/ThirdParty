@@ -1,4 +1,4 @@
-# Replacement for https://github.com/microsoft/onnxruntime/blob/v1.27.1/cmake/external/onnxruntime_external_deps.cmake
+# Replacement for https://github.com/microsoft/onnxruntime/blob/v1.28.0/cmake/external/onnxruntime_external_deps.cmake
 
 if(NOT onnxruntime_DISABLE_ABSEIL)
   find_package(absl REQUIRED CONFIG)
