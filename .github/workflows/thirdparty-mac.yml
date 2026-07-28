@@ -47,7 +47,7 @@ jobs:
     runs-on: macos-26
     steps:
       - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@v7
         with:
           show-progress: false
 
@@ -65,7 +65,6 @@ jobs:
         timeout-minutes: 330
         run: >-
           thirdparty build
-          --compiler apple-clang
           --target-arch ${{ inputs.arch }}
           ${{ inputs.recipes }}
 
@@ -78,7 +77,7 @@ jobs:
       - name: Push Images
         if: ${{ !cancelled() && inputs.publish }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           thirdparty oci push ${{ inputs.recipes }}
           --target-arch ${{ inputs.arch }}

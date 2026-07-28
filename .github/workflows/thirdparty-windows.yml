@@ -47,7 +47,7 @@ jobs:
     runs-on: windows-2025-vs2026
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7
         with:
           show-progress: false
 
@@ -77,7 +77,7 @@ jobs:
       - name: Push Images
         if: ${{ !cancelled() && inputs.publish }}
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: >-
           thirdparty oci push ${{ inputs.recipes }}
           --target-arch ${{ inputs.arch }}

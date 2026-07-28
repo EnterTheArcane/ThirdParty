@@ -108,12 +108,18 @@ jobs:
 
   combine:
     name: Combine
-    needs: [linux-arm, linux-x64, mac-arm, mac-x64, windows-arm, windows-x64]
+    needs:
+      - linux-arm
+      - linux-x64
+      - mac-arm
+      - mac-x64
+      - windows-arm
+      - windows-x64
     if: ${{ !cancelled() && github.event_name == 'workflow_dispatch' && inputs.publish }}
     runs-on: ubuntu-26.04
     steps:
       - name: Checkout
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@v7
         with:
           show-progress: false
 
@@ -127,7 +133,7 @@ jobs:
       - name: Pip Install
         run: python -m pip install -e "."
 
-      - name: Combine multi-arch tags
+      - name: Combine Tags
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: thirdparty oci combine ${{ inputs.recipes }}
