@@ -95,8 +95,7 @@ class Recipe(RecipeBase[_Options]):
             if target is not None:
                 tc.configure_args += [f"--host={target}", f"--build={target}"]
 
-            if (str(self.settings.compiler) == "Visual Studio" and Version(self.settings.compiler_version) >= "12") or \
-                    (str(self.settings.compiler) == "msvc" and Version(self.settings.compiler_version) >= "180"):
+            if str(self.settings.compiler) == "msvc":
                 tc.extra_cflags += ["-FS"]
 
             if cross_building(self) or self.settings.arch == "ARM":

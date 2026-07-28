@@ -8,7 +8,7 @@ from thirdparty.build import cross_building, stdcpp_library
 from thirdparty.env import Environment, VirtualBuildEnv
 from thirdparty.files import copy, get, mkdir, rename, replace_in_file, rm, rmdir, save
 from thirdparty.autotools import Autotools, AutotoolsToolchain
-from thirdparty.microsoft import check_min_vs, is_msvc, unix_path
+from thirdparty.microsoft import is_msvc, unix_path
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -52,7 +52,7 @@ class Recipe(RecipeBase[_Options]):
         VirtualBuildEnv(self).generate()
 
         tc = AutotoolsToolchain(self)
-        if is_msvc(self) and check_min_vs(self, "180", raise_invalid=False):
+        if is_msvc(self):
             tc.extra_cflags.append("-FS")
             tc.extra_cxxflags.append("-FS")
         if not self.settings.compiler_cxx_standard and is_msvc(self):

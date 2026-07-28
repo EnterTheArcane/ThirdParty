@@ -1,11 +1,34 @@
 import operator
 
-from thirdparty._internal.model.version import Version
-from thirdparty._internal.util.detect_api import default_cppstd as default_cppstd_
 from thirdparty.errors import RecipeInvalidConfiguration, RecipeException
 
 from typing import Any
 from thirdparty.recipe import RecipeBase
+
+
+# The toolchains are pinned (the packaged MSVC toolset, the packaged LLVM, Xcode's clang,
+# the system gcc), so what each compiler defaults to and accepts is a fixed fact rather
+# than the per-version ladders these used to be.
+_GNU_CPPSTD = [
+    "98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23", "26", "gnu26",
+]
+
+_DEFAULT_CPPSTD = {
+    "gcc": "gnu17",
+    "clang": "gnu17",
+    "apple-clang": "gnu17",
+    # /std:c++14 is MSVC's default and there is no "gnu" notion for it.
+    "msvc": "14",
+}
+
+_SUPPORTED_CPPSTD = {
+    "gcc": _GNU_CPPSTD,
+    "clang": _GNU_CPPSTD,
+    "apple-clang": _GNU_CPPSTD,
+    # https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version
+    # c++23 is only reachable through /std:c++latest; there is no c++26 yet.
+    "msvc": ["14", "17", "20", "23"],
+}
 
 
 def check_min_cppstd(recipe: RecipeBase, cppstd: Any, gnu_extensions: bool = False):
@@ -68,51 +91,34 @@ def valid_max_cppstd(recipe: RecipeBase, cppstd: Any, gnu_extensions: bool = Fal
     return True
 
 
-def default_cppstd(recipe: RecipeBase, compiler: str | None = None, compiler_version: Any = None):
+def default_cppstd(recipe: RecipeBase, compiler: str | None = None):
     """
-    Get the default ``compiler.cppstd`` for the "recipe.settings.compiler" and "recipe
-    settings.compiler_version" or for the parameters "compiler" and "compiler_version" if specified.
+    Get the default ``compiler.cppstd`` for the "recipe.settings.compiler", or for the
+    parameter "compiler" if specified.
 
     :param recipe: The current recipe object. Always use ``self``.
     :param compiler: Name of the compiler e.g. gcc
-    :param compiler_version: Version of the compiler e.g. 12
     :return: The default ``compiler.cppstd`` for the specified compiler
     """
     compiler = compiler or recipe.settings.compiler
-    compiler_version = compiler_version or recipe.settings.compiler_version
-    if not compiler or not compiler_version:
-        raise RecipeException("Called default_cppstd with no compiler or no compiler_version")
-    return default_cppstd_(compiler, Version(compiler_version))
+    if not compiler:
+        raise RecipeException("Called default_cppstd with no compiler")
+    return _DEFAULT_CPPSTD.get(compiler)
 
 
-def supported_cppstd(recipe: RecipeBase, compiler: str | None = None, compiler_version: Any = None):
+def supported_cppstd(recipe: RecipeBase, compiler: str | None = None):
     """
-    Get a list of supported ``compiler.cppstd`` for the "recipe.settings.compiler" and
-    "recipe.settings.compiler_version" or for the parameters "compiler" and "compiler_version"
-    if specified.
+    Get a list of supported ``compiler.cppstd`` for the "recipe.settings.compiler", or for
+    the parameter "compiler" if specified.
 
     :param recipe: The current recipe object. Always use ``self``.
     :param compiler: Name of the compiler e.g: gcc
-    :param compiler_version: Version of the compiler e.g: 12
     :return: a list of supported ``cppstd`` values.
     """
     compiler = compiler or recipe.settings.compiler
-    compiler_version = compiler_version or recipe.settings.compiler_version
-    if not compiler or not compiler_version:
-        raise RecipeException("Called supported_cppstd with no compiler or no compiler_version")
-
-    func = {
-        "apple-clang": _apple_clang_supported_cppstd,
-        "gcc": _gcc_supported_cppstd,
-        "msvc": _msvc_supported_cppstd,
-        "clang": _clang_supported_cppstd,
-        "mcst-lcc": _mcst_lcc_supported_cppstd,
-        "qcc": _qcc_supported_cppstd,
-        "emcc": _emcc_supported_cppstd,
-    }.get(compiler)
-    if func:
-        return func(Version(compiler_version))
-    return None
+    if not compiler:
+        raise RecipeException("Called supported_cppstd with no compiler")
+    return _SUPPORTED_CPPSTD.get(compiler)
 
 
 def _check_cppstd(
@@ -158,144 +164,3 @@ def _check_cppstd(
             f"Current cppstd ({current_cppstd}) is "
             f"{"higher" if comparator == operator.gt else "lower"} "
             f"than the required C++ standard ({cppstd}).")
-
-
-def _apple_clang_supported_cppstd(version: Any) -> list[str]:
-    """
-    ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20"]
-    """
-    if version < "4.0":
-        return []
-    if version < "5.1":
-        return ["98", "gnu98", "11", "gnu11"]
-    if version < "6.1":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14"]
-    if version < "10.0":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17"]
-    if version < "13.0":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20"]
-    # upstream PR 17092 doesn't show c++23 full support until 16
-    # but it was this before Recipe 2.9, so keeping it to not break
-    if version < "16.0":
-        return [
-            "98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23",
-        ]
-
-    return [
-        "98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23", "26", "gnu26",
-    ]
-
-
-def _gcc_supported_cppstd(version: Any) -> list[str]:
-    """
-    ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23"]
-    """
-    if version < "3.4":
-        return []
-    if version < "4.3":
-        return ["98", "gnu98"]
-    if version < "4.8":
-        return ["98", "gnu98", "11", "gnu11"]
-    if version < "5":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14"]
-    if version < "8":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17"]
-    if version < "11":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20"]
-    # upstream PR 17092
-    if version < "14.0":
-        return [
-            "98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23",
-        ]
-
-    return [
-        "98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23", "26", "gnu26",
-    ]
-
-
-def _msvc_supported_cppstd(version: Any) -> list[str]:
-    """
-    https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version?view=msvc-170
-    - /std:c++14 starting in Visual Studio 2015 Update 3 (190)
-    - /std:c++17 starting in Visual Studio 2017 version 15.3. (191)
-    - /std:c++20 starting in Visual Studio 2019 version 16.11 (192)
-    [14, 17, 20, 23]
-    """
-    if version < "190":  # pre VS 2015
-        return []
-    if version < "191":  # VS 2015
-        return ["14"]
-    if version < "192":  # VS 2017
-        return ["14", "17"]
-    if version < "193":
-        return ["14", "17", "20"]
-
-    return ["14", "17", "20", "23"]
-
-
-def _clang_supported_cppstd(version: Any) -> list[str]:
-    """
-    ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23"]
-    """
-    if version < "2.1":
-        return []
-    if version < "3.4":
-        return ["98", "gnu98", "11", "gnu11"]
-    if version < "3.5":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14"]
-    if version < "6":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17"]
-    if version < "12":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20"]
-    # upstream PR 17092
-    if version < "17.0":
-        return [
-            "98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23",
-        ]
-    return [
-        "98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23", "26", "gnu26",
-    ]
-
-
-def _mcst_lcc_supported_cppstd(version: Any) -> list[str]:
-    """
-    ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20", "23", "gnu23"]
-    """
-
-    if version < "1.21":
-        return ["98", "gnu98"]
-    if version < "1.24":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14"]
-    if version < "1.25":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17"]
-
-    # FIXME: When cppstd 23 was introduced????
-
-    return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20"]
-
-
-def _qcc_supported_cppstd(version: Any) -> list[str]:
-    """
-    [98, gnu98, 11, gnu11, 14, gnu14, 17, gnu17]
-    """
-
-    if version < "5":
-        return ["98", "gnu98"]
-    elif version < "12":
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17"]
-    else:
-        return ["98", "gnu98", "11", "gnu11", "14", "gnu14", "17", "gnu17", "20", "gnu20"]
-
-
-def _emcc_supported_cppstd(version: Any) -> list[str]:
-    """
-    emcc is based on clang but follow different versioning scheme.
-    """
-    if version <= "3.0.1":
-        return _clang_supported_cppstd(Version("14"))
-    if version <= "3.1.50":
-        return _clang_supported_cppstd(Version("18"))
-    if version <= "4.0.1":
-        return _clang_supported_cppstd(Version("20"))
-    # Since emcc 4.0.2 clang version is 21
-    return _clang_supported_cppstd(Version("21"))

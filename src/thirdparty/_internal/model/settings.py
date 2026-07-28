@@ -27,7 +27,6 @@ class Settings:
     compiler_threads: str | None = None
     compiler_toolset: str | None = None
     compiler_update: str | None = None
-    compiler_version: str | None = None
 
     os_api_level: str | int | None = None
     os_sdk: str | None = None

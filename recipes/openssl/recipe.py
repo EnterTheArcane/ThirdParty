@@ -260,7 +260,7 @@ class Recipe(RecipeBase[_Options]):
 
     @property
     def _target(self):
-        target = f"recipe-{self.settings.build_type}-{self.settings.os}-{self.settings.arch}-{self.settings.compiler}-{self.settings.compiler_version}"
+        target = f"recipe-{self.settings.build_type}-{self.settings.os}-{self.settings.arch}-{self.settings.compiler}"
         if self._use_nmake:
             target = f"VC-{target}"  # VC- prefix is important as it's checked by Configure
         if self._is_mingw:

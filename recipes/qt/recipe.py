@@ -706,7 +706,7 @@ class Recipe(RecipeBase[_Options]):
             if xplatform_val:
                 tc.variables["QT_QMAKE_TARGET_MKSPEC"] = xplatform_val
             else:
-                self.output.warning(f"host not supported: {self.settings.os} {self.settings.compiler} {self.settings.compiler_version} {self.settings.arch}")
+                self.output.warning(f"host not supported: {self.settings.os} {self.settings.compiler} {self.settings.arch}")
         if self.options.cross_compile:
             tc.variables["QT_QMAKE_DEVICE_OPTIONS"] = f"CROSS_COMPILE={self.options.cross_compile}"
         if cross_building(self):
@@ -1594,34 +1594,6 @@ class Recipe(RecipeBase[_Options]):
                 # and pulls in POSIX headers like <unistd.h> that clang-cl cannot satisfy.
                 "clang": "win32-clang-msvc",
             }.get(str(self.settings.compiler))
-
-        elif self.settings.os == "WindowsStore":
-            if is_msvc(self):
-                if self.settings.compiler == "Visual Studio":
-                    msvc_version = str(self.settings.compiler_version)
-                else:
-                    msvc_version = {
-                        "190": "14",
-                        "191": "15",
-                        "192": "16",
-                    }.get(str(self.settings.compiler_version), "")
-                return {
-                    "14": {
-                        "armv7": "winrt-arm-msvc2015",
-                        "x86": "winrt-x86-msvc2015",
-                        "x86_64": "winrt-x64-msvc2015",
-                    },
-                    "15": {
-                        "armv7": "winrt-arm-msvc2017",
-                        "x86": "winrt-x86-msvc2017",
-                        "x86_64": "winrt-x64-msvc2017",
-                    },
-                    "16": {
-                        "armv7": "winrt-arm-msvc2019",
-                        "x86": "winrt-x86-msvc2019",
-                        "x86_64": "winrt-x64-msvc2019",
-                    },
-                }.get(msvc_version, {}).get(str(self.settings.arch))
 
         elif self.settings.os == "FreeBSD":
             return {

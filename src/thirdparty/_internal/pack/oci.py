@@ -43,7 +43,6 @@ def _annotations(meta: PackageMeta, created: str) -> "dict[str, str]":
     }
     optional: dict[str, "str | None"] = {
         "thirdparty.compiler": meta.compiler,
-        "thirdparty.compiler_version": meta.compiler_version,
         "thirdparty.compiler_libcxx": meta.compiler_libcxx,
         "thirdparty.compiler_runtime": meta.compiler_runtime,
     }

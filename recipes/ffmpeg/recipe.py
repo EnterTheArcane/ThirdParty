@@ -16,7 +16,7 @@ from thirdparty.files import (
 )
 from thirdparty.autotools import Autotools, AutotoolsDeps, AutotoolsToolchain
 from thirdparty.pkgconfig import PkgConfigDeps
-from thirdparty.microsoft import check_min_vs, is_msvc, unix_path
+from thirdparty.microsoft import is_msvc, unix_path
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -503,9 +503,6 @@ class Recipe(RecipeBase[_Options]):
             # otherwise vcruntime_c11_stdatomic.h errors "C atomic support is not enabled".
             # clang-cl supports C11 atomics unconditionally, so this is cl.exe-only.
             tc.extra_cflags.append("-experimental:c11atomics")
-            if not check_min_vs(self, "190", raise_invalid=False):
-                # Visual Studio 2013 (and earlier) doesn't support "inline" keyword for C (only for C++)
-                tc.extra_defines.append("inline=__inline")
         if cross_building(self):
             args.append(f"--target-os={self._target_os}")
             if is_apple_os(self) and self.options.with_audiotoolbox:

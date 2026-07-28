@@ -348,7 +348,7 @@ class MsvsToolsetTests(unittest.TestCase):
         self.assertEqual(msvs_toolset(recipe), "ClangCL")
 
     def test_fallback_without_contract(self):
-        recipe = _make_recipe(settings=_settings(os="Windows", compiler="msvc", compiler_version="194"))
+        recipe = _make_recipe(settings=_settings(os="Windows", compiler="msvc"))
         self.assertEqual(msvs_toolset(recipe), "v143")
 
 

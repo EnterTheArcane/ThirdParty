@@ -8,7 +8,6 @@ from thirdparty.env import Environment, VirtualBuildEnv
 from thirdparty.files import copy, get, rm, rmdir, replace_in_file
 from thirdparty.pkgconfig import PkgConfigDeps
 from thirdparty.meson import Meson, MesonToolchain
-from thirdparty.microsoft import is_msvc
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -85,16 +84,6 @@ class Recipe(RecipeBase[_Options]):
         def is_enabled(value: Any):
             return "enabled" if value else "disabled"
 
-        def meson_backend_and_flags() -> tuple[str, list[str]]:
-            def is_vs_2017():
-                version = Version(self.settings.compiler_version)
-                return version == "15" or version == "191"
-
-            if is_msvc(self) and is_vs_2017() and self.settings.build_type == "Debug":
-                # Mitigate https://learn.microsoft.com/en-us/cpp/build/reference/zf?view=msvc-170
-                return "vs", ["/bigobj"]
-            return "ninja", []
-
         VirtualBuildEnv(self).generate()
         PkgConfigDeps(self).generate()
 
@@ -106,8 +95,7 @@ class Recipe(RecipeBase[_Options]):
             env.define_path("DYLD_LIBRARY_PATH", "")
             env.vars(self, scope="build").save_script("buildenv_macos_runtimepath")
 
-        backend, cxxflags = meson_backend_and_flags()
-        tc = MesonToolchain(self, backend=backend)
+        tc = MesonToolchain(self, backend="ninja")
         tc.project_options["auto_features"] = "disabled"
         tc.project_options.update(
             {
@@ -124,7 +112,6 @@ class Recipe(RecipeBase[_Options]):
                 "benchmark": "disabled",
                 "icu_builtin": "false",
             })
-        tc.cpp_args += cxxflags
         tc.generate()
 
     def build(self):

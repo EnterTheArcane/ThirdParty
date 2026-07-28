@@ -18,7 +18,7 @@ from thirdparty.build.flags import architecture_flag, architecture_link_flag, li
 from thirdparty.cmake.toolchain import RECIPE_TOOLCHAIN_FILENAME
 from thirdparty.cmake.utils import is_multi_configuration
 from thirdparty.errors import RecipeException
-from thirdparty.microsoft.visual import msvc_version_to_toolset_version, msvc_platform_from_arch
+from thirdparty.microsoft.visual import VS_PLATFORM_TOOLSET, msvc_platform_from_arch
 
 from typing import Any, cast
 from thirdparty.recipe import RecipeBase
@@ -1181,15 +1181,7 @@ class GenericSystemBlock(Block):
         settings = recipe.settings
         compiler = settings.compiler
         if compiler == "msvc":
-            toolset = settings.compiler_toolset
-            if toolset is None:
-                compiler_version = str(settings.compiler_version)
-                msvc_update = recipe.conf.tools.microsoft.msvc_update
-                compiler_update = msvc_update or settings.compiler_update
-                toolset = msvc_version_to_toolset_version(compiler_version)
-                if compiler_update is not None:  # It is full one(19.28), not generic 19.2X
-                    # The equivalent of compiler 19.26 is toolset 14.26
-                    toolset = cast(str, toolset) + f",version=14.{compiler_version[-1]}{compiler_update}"
+            toolset = settings.compiler_toolset or VS_PLATFORM_TOOLSET
         elif compiler == "clang":
             if generator and "Visual" in generator:
                 if any(f"Visual Studio {v}" in generator for v in ("16", "17", "18")):

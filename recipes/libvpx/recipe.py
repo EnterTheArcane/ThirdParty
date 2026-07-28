@@ -183,13 +183,9 @@ class Recipe(RecipeBase[_Options]):
 
         compiler = str(self.settings.compiler)
         os_name = str(self.settings.os)
-        if str(self.settings.compiler) == "Visual Studio":
-            vc_version = self.settings.compiler_version
-            compiler = f"vs{vc_version}"
-        elif is_msvc(self):
-            vc_version = str(self.settings.compiler_version)
-            vc_version = {"170": "11", "180": "12", "190": "14", "191": "15", "192": "16", "193": "17", "194": "17", "195": "18"}[vc_version]
-            compiler = f"vs{vc_version}"
+        if is_msvc(self):
+            # The msvc package pins the VS 2022 toolset, which is libvpx's "vs17" target.
+            compiler = "vs17"
         elif self.settings.compiler in ["gcc", "clang", "apple-clang"]:
             compiler = "gcc"
         host_os = str(self.settings.os)

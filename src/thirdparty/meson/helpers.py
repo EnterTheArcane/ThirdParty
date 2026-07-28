@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
-from thirdparty.build.flags import cppstd_msvc_flag, disable_flag
+from thirdparty.build.flags import cppstd_msvc_flag, disable_flag, gnu_cppstd_flag
 from thirdparty.recipe import RecipeBase
 
 # https://mesonbuild.com/Reference-tables.html#operating-system-names
@@ -60,15 +60,10 @@ def to_meson_value(value: Any) -> Any:
     return value
 
 
-def to_cppstd_flag(
-    recipe: RecipeBase,
-    compiler: str | None,
-    compiler_version: str | None,
-    cppstd: str | None) -> str | None:
+def to_cppstd_flag(recipe: RecipeBase, compiler: str | None, cppstd: str | None) -> str | None:
     """Gets a valid cppstd flag.
     :param recipe: ``RecipeBase`` instance.
     :param compiler: ``str`` compiler name.
-    :param compiler_version: ``str`` compiler version.
     :param cppstd: ``str`` cppstd version.
     :return: ``str`` cppstd flag.
     """
@@ -80,10 +75,10 @@ def to_cppstd_flag(
         # Meson's logic with 'vc++X' vs 'c++X' is possibly a little outdated.
         # Presumably the intent is 'vc++X' is permissive and 'c++X' is not,
         # but '/permissive-' is the default since 16.8.
-        flag = cppstd_msvc_flag(compiler_version, cppstd)
+        flag = cppstd_msvc_flag(cppstd)
         return "v%s" % flag if flag else None
     else:
-        return f"gnu++{cppstd[3:]}" if cppstd.startswith("gnu") else f"c++{cppstd}"
+        return gnu_cppstd_flag(cppstd)
 
 
 def to_cstd_flag(recipe: RecipeBase, cstd: str | None) -> str | None:

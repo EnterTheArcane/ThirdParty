@@ -164,14 +164,10 @@ class MesonToolchain:
         compiler = self._recipe.settings.compiler
         if compiler is None:
             raise RecipeException("MesonToolchain needs 'settings.compiler', but it is not defined")
-        compiler_version = self._recipe.settings.compiler_version
-        if compiler == "msvc" and compiler_version is None:
-            raise RecipeException("MesonToolchain needs 'settings.compiler_version' for the msvc compiler, but it is not defined")
-
         cppstd = self._recipe.settings.compiler_cxx_standard
         cstd = self._recipe.settings.compiler_c_standard
         #: C++ language standard to use. Defined by ``to_cppstd_flag()`` by default.
-        self.cpp_std = to_cppstd_flag(self._recipe, compiler, compiler_version, cppstd)
+        self.cpp_std = to_cppstd_flag(self._recipe, compiler, cppstd)
         #: C language standard to use. Defined by ``to_cstd_flag()`` by default.
         self.c_std = to_cstd_flag(self._recipe, cstd)
         #: VS runtime library to use. Defined by ``msvc_runtime_flag()`` by default.

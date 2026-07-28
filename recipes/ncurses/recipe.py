@@ -174,8 +174,8 @@ class Recipe(RecipeBase[_Options]):
         if host:
             tc.configure_args.append(f"ac_cv_host={host}")
             tc.configure_args.append(f"ac_cv_target={host}")
-        if self.settings.compiler == "gcc" and Version(self.settings.compiler_version) >= 15:
-            # FIXME: Workaround to allow building with with GCC15
+        if self.settings.compiler == "gcc":
+            # FIXME: Workaround to allow building with GCC 15, whose default is gnu23.
             # Upstream has proper but huge patches: https://invisible-island.net/ncurses/NEWS.html#index-t20241207
             tc.extra_cflags.append("-std=gnu17")
 

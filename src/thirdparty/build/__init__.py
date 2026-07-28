@@ -5,7 +5,6 @@ from collections.abc import Iterable
 from shlex import quote
 from typing import Any
 
-from thirdparty.build.compiler import check_min_compiler_version
 from thirdparty.build.cppstd import check_max_cppstd, check_min_cppstd, valid_max_cppstd, valid_min_cppstd, default_cppstd, supported_cppstd
 from thirdparty.build.cpu import build_jobs
 from thirdparty.build.cross_building import cross_building, can_run
@@ -19,7 +18,6 @@ RECIPE_TOOLCHAIN_ARGS_FILE = "buildenv.conf"
 RECIPE_TOOLCHAIN_ARGS_SECTION = "toolchain"
 
 __all__ = [
-    "check_min_compiler_version",
     "check_max_cppstd", "check_min_cppstd", "valid_max_cppstd", "valid_min_cppstd",
     "default_cppstd", "supported_cppstd",
     "build_jobs",

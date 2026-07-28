@@ -10,7 +10,7 @@ from thirdparty._internal.util.files import save, load
 from thirdparty.build import build_jobs
 from thirdparty.env import VirtualBuildEnv
 from thirdparty.errors import RecipeException
-from thirdparty.microsoft.visual import msvs_toolset, msvc_runtime_flag, msvc_platform_from_arch, vs_ide_version
+from thirdparty.microsoft.visual import msvs_toolset, msvc_runtime_flag, msvc_platform_from_arch
 from thirdparty.recipe import RecipeBase
 
 
@@ -25,9 +25,6 @@ class MSBuildToolchain:
         """\
         <?xml version="1.0" encoding="utf-8"?>
         <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
-            {% if toolset_version_full_path %}
-            <Import Project="{{toolset_version_full_path}}" />
-            {% endif %}
             <ItemDefinitionGroup>
             <ClCompile>
                 <PreprocessorDefinitions>{{ defines }}%(PreprocessorDefinitions)</PreprocessorDefinitions>
@@ -86,7 +83,6 @@ class MSBuildToolchain:
         _tc = find_toolchain(recipe)
         if _tc is not None and _tc.msbuild_properties:
             self.properties.update(_tc.msbuild_properties)
-        self.toolset_version_full_path = _get_toolset_props(recipe)
 
     def _name_condition(self, settings: Settings):
         platform = msvc_platform_from_arch(settings.arch)
@@ -161,7 +157,6 @@ class MSBuildToolchain:
             "parallel": parallel,
             "properties": self.properties,
             "winsdk_version": winsdk_version,
-            "toolset_version_full_path": self.toolset_version_full_path,
         }
 
     def _write_config_toolchain(self, config_filename: str):
@@ -223,28 +218,3 @@ class MSBuildToolchain:
         rcflags = self._recipe.conf.tools.build.rcflags
         defines = self._recipe.conf.tools.build.defines
         return cxxflags, cflags, defines, sharedlinkflags, exelinkflags, rcflags
-
-
-def _get_toolset_props(recipe: RecipeBase):
-    msvc_update = recipe.conf.tools.microsoft.msvc_update
-    compiler_update = msvc_update or recipe.settings.compiler_update
-    if compiler_update is None:
-        return
-
-    vs_version = vs_ide_version(recipe)
-    if int(vs_version) <= 14:
-        return
-    vs_path = recipe.conf.tools.msbuild.installation_path
-    if not vs_path or not os.path.isdir(vs_path):
-        return
-
-    basebuild = os.path.normpath(os.path.join(vs_path, "VC/Auxiliary/Build"))
-    # The equivalent of compiler 19.26 is toolset 14.26
-    compiler_version = str(recipe.settings.compiler_version)
-    vcvars_ver = f"14.{compiler_version[-1]}{compiler_update}"
-    for folder in os.listdir(basebuild):
-        if not os.path.isdir(os.path.join(basebuild, folder)):
-            continue
-        if folder.startswith(vcvars_ver):
-            result = folder
-            return os.path.join(basebuild, result, f"Microsoft.VCToolsVersion.{result}.props")

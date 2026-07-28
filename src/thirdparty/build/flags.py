@@ -1,6 +1,5 @@
 from typing import Any
 
-from thirdparty._internal.model.version import Version
 from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty.errors import RecipeException
 from thirdparty.recipe import RecipeBase
@@ -251,325 +250,107 @@ def lto_flags(recipe: RecipeBase) -> list[str]:
     return ["-flto=thin", "-ffat-lto-objects"]
 
 
+
+# The standards each front end accepts are fixed by the pinned toolchains (the packaged
+# MSVC toolset, the packaged LLVM, Xcode's clang, the system gcc), so the flags below are
+# plain name mappings rather than the version ladders they used to be.
+_MSVC_CPPSTD = {"14": "c++14", "17": "c++17", "20": "c++20", "23": "c++latest"}
+_MSVC_CSTD = {"11": "c11", "17": "c17"}
+_GNU_CSTD = {"99": "c99", "11": "c11", "17": "c17", "23": "c23"}
+_GNU_COMPILERS = ("gcc", "clang", "apple-clang")
+
+
 def cppstd_flag(recipe: RecipeBase) -> str:
     """
-    Returns flags specific to the C++ standard based on the ``recipe.settings.compiler``,
-    ``recipe.settings.compiler_version`` and ``recipe.settings.compiler_cxx_standard``.
+    Returns flags specific to the C++ standard based on the ``recipe.settings.compiler``
+    and ``recipe.settings.compiler_cxx_standard``.
 
     It also considers when using GNU extension in ``settings.compiler_cxx_standard``, reflecting it in the
-    compiler flag. Currently, it supports GCC, Clang, AppleClang, MSVC, Intel, MCST-LCC.
+    compiler flag. Currently, it supports GCC, Clang, AppleClang and MSVC.
 
-    In case there is no ``settings.compiler`` or ``settings.cppstd`` in the profile, the result will
-    be an **empty string**.
+    In case there is no ``settings.compiler`` or ``settings.compiler_cxx_standard`` in the profile,
+    the result will be an **empty string**.
 
     :param recipe: The current recipe object. Always use ``self``.
     :return: ``str`` with the standard C++ flag used by the compiler. e.g. "-std=c++11", "/std:c++latest"
     """
     compiler = recipe.settings.compiler
-    compiler_version = recipe.settings.compiler_version
     cppstd = recipe.settings.compiler_cxx_standard
 
-    if not compiler or not compiler_version or not cppstd:
+    if not compiler or not cppstd:
         return ""
 
     if disable_flag(recipe, "cppstd"):
         return ""
 
-    func = {
-        "gcc": _cppstd_gcc, "clang": _cppstd_clang, "apple-clang": _cppstd_apple_clang, "msvc": _cppstd_msvc, "mcst-lcc": _cppstd_mcst_lcc,
-    }.get(compiler)
-    flag = None
-    if func:
-        flag = func(Version(compiler_version), str(cppstd))
-    if flag and llvm_clang_front(recipe) == "clang-cl":
+    if compiler == "msvc":
+        flag = cppstd_msvc_flag(str(cppstd))
+        return f"/std:{flag}" if flag else ""
+
+    if compiler not in _GNU_COMPILERS:
+        return ""
+
+    flag = f"-std={gnu_cppstd_flag(str(cppstd))}"
+    if llvm_clang_front(recipe) == "clang-cl":
         flag = flag.replace("=", ":")
-    return flag or ""
+    return flag
 
 
-def cppstd_msvc_flag(visual_version: Any, cppstd: str) -> str | None:
-    # https://docs.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version
-    if cppstd == "23":
-        if visual_version >= "193":
-            return "c++latest"
-    elif cppstd == "20":
-        if visual_version >= "192":
-            return "c++20"
-        elif visual_version >= "191":
-            return "c++latest"
-    elif cppstd == "17":
-        if visual_version >= "191":
-            return "c++17"
-        elif visual_version >= "190":
-            return "c++latest"
-    elif cppstd == "14":
-        if visual_version >= "190":
-            return "c++14"
+def cppstd_msvc_flag(cppstd: str) -> str | None:
+    """The ``/std:`` value for *cppstd*, or None when MSVC has no flag for it.
 
-    return None
-
-
-def _cppstd_msvc(visual_version: Version, cppstd: str) -> str | None:
-    flag = cppstd_msvc_flag(visual_version, cppstd)
-    return f"/std:{flag}" if flag else None
-
-
-def _cppstd_apple_clang(clang_version: Version, cppstd: str) -> str | None:
+    https://docs.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version
+    C++23 is only reachable through ``c++latest``; anything newer has no flag at all.
     """
-    Inspired in:
-    https://github.com/Kitware/CMake/blob/master/Modules/Compiler/AppleClang-CXX.cmake
-    """
-
-    v98 = vgnu98 = v11 = vgnu11 = v14 = vgnu14 = v17 = vgnu17 = v20 = vgnu20 = v23 = vgnu23 = v26 = vgnu26 = None
-
-    if clang_version >= "4.0":
-        v98 = "c++98"
-        vgnu98 = "gnu++98"
-        v11 = "c++11"
-        vgnu11 = "gnu++11"
-
-    if clang_version >= "6.1":
-        v14 = "c++14"
-        vgnu14 = "gnu++14"
-    elif clang_version >= "5.1":
-        v14 = "c++1y"
-        vgnu14 = "gnu++1y"
-
-    # Not confirmed that it didn't work before 9.1 but 1z is still valid, so we are ok
-    # Note: cmake allows c++17 since version 10.0
-    if clang_version >= "9.1":
-        v17 = "c++17"
-        vgnu17 = "gnu++17"
-    elif clang_version >= "6.1":
-        v17 = "c++1z"
-        vgnu17 = "gnu++1z"
-
-    if clang_version >= "13.0":
-        v20 = "c++20"
-        vgnu20 = "gnu++20"
-    elif clang_version >= "10.0":
-        v20 = "c++2a"
-        vgnu20 = "gnu++2a"
-
-    if clang_version >= "16.0":
-        v23 = "c++23"
-        vgnu23 = "gnu++23"
-
-        v26 = "c++26"
-        vgnu26 = "gnu++26"
-    elif clang_version >= "13.0":
-        v23 = "c++2b"
-        vgnu23 = "gnu++2b"
-
-    flag = {
-        "98": v98, "gnu98": vgnu98, "11": v11, "gnu11": vgnu11, "14": v14, "gnu14": vgnu14, "17": v17, "gnu17": vgnu17, "20": v20, "gnu20": vgnu20, "23": v23, "gnu23": vgnu23, "26": v26, "gnu26": vgnu26,
-    }.get(cppstd)
-
-    return f"-std={flag}" if flag else None
+    return _MSVC_CPPSTD.get(cppstd)
 
 
-def _cppstd_clang(clang_version: Version, cppstd: str) -> str | None:
-    """
-    Inspired in:
-    https://github.com/Kitware/CMake/blob/
-    1fe2dc5ef2a1f262b125a2ba6a85f624ce150dd2/Modules/Compiler/Clang-CXX.cmake
-
-    https://clang.llvm.org/cxx_status.html
-    """
-    v98 = vgnu98 = v11 = vgnu11 = v14 = vgnu14 = v17 = vgnu17 = v20 = vgnu20 = v23 = vgnu23 = v26 = vgnu26 = None
-
-    if clang_version >= "2.1":
-        v98 = "c++98"
-        vgnu98 = "gnu++98"
-
-    if clang_version >= "3.1":
-        v11 = "c++11"
-        vgnu11 = "gnu++11"
-    elif clang_version >= "2.1":
-        v11 = "c++0x"
-        vgnu11 = "gnu++0x"
-
-    if clang_version >= "3.5":
-        v14 = "c++14"
-        vgnu14 = "gnu++14"
-    elif clang_version >= "3.4":
-        v14 = "c++1y"
-        vgnu14 = "gnu++1y"
-
-    if clang_version >= "5":
-        v17 = "c++17"
-        vgnu17 = "gnu++17"
-    elif clang_version >= "3.5":
-        v17 = "c++1z"
-        vgnu17 = "gnu++1z"
-
-    if clang_version >= "6":
-        v20 = "c++2a"
-        vgnu20 = "gnu++2a"
-
-    if clang_version >= "12":
-        v20 = "c++20"
-        vgnu20 = "gnu++20"
-
-        v23 = "c++2b"
-        vgnu23 = "gnu++2b"
-
-    if clang_version >= "17":
-        v23 = "c++23"
-        vgnu23 = "gnu++23"
-
-        v26 = "c++26"
-        vgnu26 = "gnu++26"
-
-    flag = {
-        "98": v98, "gnu98": vgnu98, "11": v11, "gnu11": vgnu11, "14": v14, "gnu14": vgnu14, "17": v17, "gnu17": vgnu17, "20": v20, "gnu20": vgnu20, "23": v23, "gnu23": vgnu23, "26": v26, "gnu26": vgnu26,
-    }.get(cppstd)
-    return f"-std={flag}" if flag else None
-
-
-def _cppstd_gcc(gcc_version: Version, cppstd: str) -> str | None:
-    """https://github.com/Kitware/CMake/blob/master/Modules/Compiler/GNU-CXX.cmake"""
-    # https://gcc.gnu.org/projects/cxx-status.html
-    v98 = vgnu98 = v11 = vgnu11 = v14 = vgnu14 = v17 = vgnu17 = v20 = vgnu20 = v23 = vgnu23 = v26 = vgnu26 = None
-
-    if gcc_version >= "3.4":
-        v98 = "c++98"
-        vgnu98 = "gnu++98"
-
-    if gcc_version >= "4.7":
-        v11 = "c++11"
-        vgnu11 = "gnu++11"
-    elif gcc_version >= "4.3":
-        v11 = "c++0x"
-        vgnu11 = "gnu++0x"
-
-    if gcc_version >= "4.9":
-        v14 = "c++14"
-        vgnu14 = "gnu++14"
-    elif gcc_version >= "4.8":
-        v14 = "c++1y"
-        vgnu14 = "gnu++1y"
-
-    if gcc_version >= "5":
-        v17 = "c++1z"
-        vgnu17 = "gnu++1z"
-
-    if gcc_version >= "5.2":  # Not sure if even in 5.1 gnu17 is valid, but gnu1z is
-        v17 = "c++17"
-        vgnu17 = "gnu++17"
-
-    if gcc_version >= "8":
-        v20 = "c++2a"
-        vgnu20 = "gnu++2a"
-
-    if gcc_version >= "10":
-        v20 = "c++20"
-        vgnu20 = "gnu++20"
-
-    if gcc_version >= "11":
-        v23 = "c++23"
-        vgnu23 = "gnu++23"
-
-    if gcc_version >= "14":
-        v26 = "c++26"
-        vgnu26 = "gnu++26"
-
-    flag = {
-        "98": v98, "gnu98": vgnu98, "11": v11, "gnu11": vgnu11, "14": v14, "gnu14": vgnu14, "17": v17, "gnu17": vgnu17, "20": v20, "gnu20": vgnu20, "23": v23, "gnu23": vgnu23, "26": v26, "gnu26": vgnu26,
-    }.get(cppstd)
-    return f"-std={flag}" if flag else None
-
-
-def _cppstd_mcst_lcc(mcst_lcc_version: Version, cppstd: str) -> str | None:
-    v11 = vgnu11 = v14 = vgnu14 = v17 = vgnu17 = v20 = vgnu20 = None
-
-    if mcst_lcc_version >= "1.21":
-        v11 = "c++11"
-        vgnu11 = "gnu++11"
-        v14 = "c++14"
-        vgnu14 = "gnu++14"
-
-    if mcst_lcc_version >= "1.24":
-        v17 = "c++17"
-        vgnu17 = "gnu++17"
-
-    if mcst_lcc_version >= "1.25":
-        v20 = "c++2a"
-        vgnu20 = "gnu++2a"
-
-    # FIXME: What is this "03"?? that is not a valid cppstd in the settings.yml
-    flag = {
-        "98": "c++98", "gnu98": "gnu++98", "03": "c++03", "gnu03": "gnu++03", "11": v11, "gnu11": vgnu11, "14": v14, "gnu14": vgnu14, "17": v17, "gnu17": vgnu17, "20": v20, "gnu20": vgnu20,
-    }.get(cppstd)
-    return f"-std={flag}" if flag else None
+def gnu_cppstd_flag(cppstd: str) -> str:
+    """The ``-std=`` value for *cppstd* on the GNU-style front ends, e.g. ``gnu17`` -> ``gnu++17``."""
+    return f"gnu++{cppstd[3:]}" if cppstd.startswith("gnu") else f"c++{cppstd}"
 
 
 def cstd_flag(recipe: RecipeBase) -> str:
     """
-    Returns flags specific to the C+standard based on the ``recipe.settings.compiler``,
-    ``recipe.settings.compiler_version`` and ``recipe.settings.compiler_c_standard``.
+    Returns flags specific to the C standard based on the ``recipe.settings.compiler``
+    and ``recipe.settings.compiler_c_standard``.
 
     It also considers when using GNU extension in ``settings.compiler_c_standard``, reflecting it in the
-    compiler flag. Currently, it supports GCC, Clang, AppleClang, MSVC, Intel, MCST-LCC.
+    compiler flag. Currently, it supports GCC, Clang, AppleClang, MSVC.
 
-    In case there is no ``settings.compiler`` or ``settings.cstd`` in the profile, the result will
-    be an **empty string**.
+    In case there is no ``settings.compiler`` or ``settings.compiler_c_standard`` in the profile,
+    the result will be an **empty string**.
 
     :param recipe: The current recipe object. Always use ``self``.
     :return: ``str`` with the standard C flag used by the compiler.
     """
     compiler = recipe.settings.compiler
-    compiler_version = recipe.settings.compiler_version
     cstd = recipe.settings.compiler_c_standard
 
-    if not compiler or not compiler_version or not cstd:
+    if not compiler or not cstd:
         return ""
 
     if disable_flag(recipe, "cstd"):
         return ""
 
-    func = {
-        "gcc": _cstd_gcc, "clang": _cstd_clang, "apple-clang": _cstd_apple_clang, "msvc": _cstd_msvc,
-    }.get(compiler)
-    flag = None
-    if func:
-        flag = func(Version(compiler_version), str(cstd))
-    return flag or ""
+    if compiler == "msvc":
+        flag = cstd_msvc_flag(str(cstd))
+        return f"/std:{flag}" if flag else ""
+
+    if compiler not in ("gcc", "clang", "apple-clang"):
+        return ""
+
+    return f"-std={gnu_cstd_flag(str(cstd))}"
 
 
-def _cstd_gcc(gcc_version: Version, cstd: str) -> str | None:
-    # TODO: Verify flags per version
-    flag = {
-        "99": "c99", "11": "c11", "17": "c17", "23": "c23",
-    }.get(cstd, cstd)
-    return f"-std={flag}" if flag else None
+def cstd_msvc_flag(cstd: str) -> str | None:
+    """The ``/std:`` value for *cstd*, or None when MSVC has no flag for it."""
+    return _MSVC_CSTD.get(cstd)
 
 
-def _cstd_clang(gcc_version: Version, cstd: str) -> str | None:
-    # TODO: Verify flags per version
-    flag = {
-        "99": "c99", "11": "c11", "17": "c17", "23": "c23",
-    }.get(cstd, cstd)
-    return f"-std={flag}" if flag else None
+def gnu_cstd_flag(cstd: str) -> str:
+    """The ``-std=`` value for *cstd* on the GNU-style front ends, e.g. ``17`` -> ``c17``.
 
-
-def _cstd_apple_clang(gcc_version: Version, cstd: str) -> str | None:
-    # TODO: Verify flags per version
-    flag = {
-        "99": "c99", "11": "c11", "17": "c17", "23": "c23",
-    }.get(cstd, cstd)
-    return f"-std={flag}" if flag else None
-
-
-def cstd_msvc_flag(visual_version: Any, cstd: str) -> str | None:
-    if cstd == "17":
-        if visual_version >= "192":
-            return "c17"
-    elif cstd == "11":
-        if visual_version >= "192":
-            return "c11"
-    return None
-
-
-def _cstd_msvc(visual_version: Version, cstd: str) -> str | None:
-    flag = cstd_msvc_flag(visual_version, cstd)
-    return f"/std:{flag}" if flag else None
+    GNU-extension values (``gnu17``) are already valid ``-std=`` values, so they pass through.
+    """
+    return _GNU_CSTD.get(cstd, cstd)

@@ -10,7 +10,7 @@ from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty.build.flags import architecture_flag, architecture_link_flag, build_type_flags, cppstd_flag, build_type_link_flags, libcxx_flags, cstd_flag, llvm_clang_front, lto_flags, threads_flags
 from thirdparty.env import Environment, VirtualBuildEnv
 from thirdparty.autotools.get_gnu_triplet import _get_gnu_triplet
-from thirdparty.microsoft import msvc_runtime_flag, unix_path, check_min_vs, is_msvc
+from thirdparty.microsoft import msvc_runtime_flag, unix_path, is_msvc
 from thirdparty.recipe import RecipeBase
 
 
@@ -286,11 +286,8 @@ class AutotoolsToolchain:
             return []
         # -nologo silences cl/link's "Microsoft (R) ... Copyright (C) Microsoft" banner, which is
         # otherwise printed once per invocation (1000s of lines across an autotools/nmake build).
-        # -FS avoids fatal PDB write races (C1041) on VS >= 18.
-        flags = ["-nologo"]
-        if check_min_vs(self._recipe, "180", raise_invalid=False):
-            flags.append("-FS")
-        return flags
+        # -FS avoids fatal PDB write races (C1041).
+        return ["-nologo", "-FS"]
 
     def _add_msvc_flags(self, flags: list[str]) -> list[str]:
         # This is to avoid potential duplicate with users recipes -FS (already some in RecipeCenter)

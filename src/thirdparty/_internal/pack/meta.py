@@ -56,7 +56,6 @@ class PackageMeta:
     arch: str
     build_type: str
     compiler: "str | None" = None
-    compiler_version: "str | None" = None
     compiler_libcxx: "str | None" = None
     compiler_runtime: "str | None" = None
     options: "list[tuple[str, str]]" = field(default_factory=_empty_options)
@@ -82,7 +81,6 @@ class PackageMeta:
             "arch": self.arch,
             "build_type": self.build_type,
             "compiler": self.compiler,
-            "compiler_version": self.compiler_version,
             "compiler_libcxx": self.compiler_libcxx,
             "compiler_runtime": self.compiler_runtime,
             "options": {k: v for k, v in self.options},
@@ -150,7 +148,6 @@ def gather_meta(
         arch=str(settings.arch),
         build_type=str(settings.build_type),
         compiler=_opt_str(settings.compiler),
-        compiler_version=_opt_str(settings.compiler_version),
         compiler_libcxx=_opt_str(settings.compiler_libcxx),
         compiler_runtime=_opt_str(settings.compiler_runtime),
         options=options,

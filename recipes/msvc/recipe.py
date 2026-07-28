@@ -62,12 +62,6 @@ class Recipe(RecipeBase):
     def toolchain_settings(self, settings: Settings):
         settings.compiler = "msvc"
         settings.compiler_runtime = "dynamic"
-        # cl.exe's version drives cppstd flag emission and premake's VS-action selection. The
-        # MSVC toolset minor tracks cl's minor (toolset 14.44 -> cl 19.44), and the conan-style
-        # MSVC version drops cl's last digit: 19.44 -> "194" (VS 2022 17.10+). Without this the
-        # version is None, so cppstd_flag returns "" and premake computes action "vsNone".
-        _minor = int(self.version.split(".")[1])
-        settings.compiler_version = f"19{_minor // 10}"
 
     def requirements(self):
         self.requires("windows-sdk")

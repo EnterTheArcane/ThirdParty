@@ -12,11 +12,9 @@ from thirdparty.premake.toolchain import PremakeToolchain
 from thirdparty.recipe import RecipeBase
 from thirdparty.shell import run
 
-# Source: https://learn.microsoft.com/en-us/cpp/overview/compiler-versions?view=msvc-170
-PREMAKE_VS_VERSION = {
-    "190": "2015", "191": "2017", "192": "2019", "193": "2022", "194": "2022",  # still 2022
-    "195": "2026",
-}
+# The msvc package pins the VS 2022 toolset, so the premake action that goes with it is
+# fixed too. Source: https://learn.microsoft.com/en-us/cpp/overview/compiler-versions?view=msvc-170
+PREMAKE_VS_ACTION = "vs2022"
 
 
 class Premake:
@@ -53,8 +51,7 @@ class Premake:
         self.arguments = {}  # https://premake.github.io/docs/Command-Line-Arguments/
 
         if "msvc" in cast(str, self._recipe.settings.compiler):
-            msvc_version = PREMAKE_VS_VERSION.get(str(self._recipe.settings.compiler_version))
-            self.action = f"vs{msvc_version}"
+            self.action = PREMAKE_VS_ACTION
         else:
             self.action = "gmake"  # New generator (old gmakelegacy is deprecated)
 

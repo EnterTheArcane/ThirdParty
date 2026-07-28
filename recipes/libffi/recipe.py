@@ -6,7 +6,7 @@ from thirdparty.apple import fix_apple_shared_install_name
 from thirdparty.env import VirtualBuildEnv
 from thirdparty.files import copy, get, mkdir, rm, rmdir
 from thirdparty.autotools import Autotools, AutotoolsToolchain
-from thirdparty.microsoft import check_min_vs, is_msvc, is_msvc_static_runtime, msvc_runtime_flag, unix_path
+from thirdparty.microsoft import is_msvc, is_msvc_static_runtime, msvc_runtime_flag, unix_path
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -71,7 +71,7 @@ class Recipe(RecipeBase[_Options]):
         env = tc.environment()
         if self.settings_build.os == "Windows" and self.settings.compiler_runtime:
 
-            if is_msvc(self) and check_min_vs(self, "180", raise_invalid=False):
+            if is_msvc(self):
                 # upstream issue 6514
                 tc.extra_cflags.append("-FS")
 
