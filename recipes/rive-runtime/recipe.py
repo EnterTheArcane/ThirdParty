@@ -1,6 +1,6 @@
 from thirdparty import RecipeBase
 from thirdparty.env import Environment, VirtualBuildEnv
-from thirdparty.files import apply_patches, copy, get
+from thirdparty.files import apply_patches, copy, get, replace_in_file
 from thirdparty.premake import Premake, PremakeDeps, PremakeToolchain
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
@@ -78,16 +78,26 @@ class Recipe(RecipeBase):
 
         premake = Premake(self)
         premake.luafile = (self.folders.source / "premake5_v2.lua").as_posix()
-        if premake.action == "vs2026":
+        if self.settings.os == "Windows":
+            # Use premake's gmake action (make driving the toolset compiler directly) on Windows
+            # for BOTH clang and msvc. The hermetic toolchain has no VS install, and wiring the
+            # packaged MSVC toolset location into premake-generated .vcxproj/MSBuild is far more
+            # fragile than invoking cl.exe / clang-cl through make.
+            premake.action = "gmake"
+        elif premake.action == "vs2026":
             premake.action = "vs2022"
         premake.arguments["config"] = config
         # Put generated build files directly in build_folder so premake.build() can find them
         premake.arguments["out"] = "."
         premake.arguments["arch"] = _arch_map.get(str(self.settings.arch), "x64")
-        if self.settings.os == "Windows":
-            premake.arguments["toolset"] = "msc"
-        elif self.settings.compiler == "clang":
+        # Select by compiler first: a clang build must use the clang toolset even on Windows
+        # (clang++ defaults to the MSVC ABI there). Besides using the requested compiler, the
+        # clang/gcc toolsets emit GNU-style -I/-D flags, which sidesteps the Git-bash POSIX
+        # path-conversion that mangles cl.exe's /I and /D flags when make runs recipes via sh.
+        if self.settings.compiler == "clang":
             premake.arguments["toolset"] = "clang"
+        elif self.settings.os == "Windows":
+            premake.arguments["toolset"] = "msc"
         else:
             premake.arguments["toolset"] = "gcc"
         premake.arguments["with_rive_text"] = ""
@@ -109,7 +119,34 @@ class Recipe(RecipeBase):
         finally:
             premake._premake_recipe_toolchain = _real_tc  # type: ignore[reportPrivateUsage]
 
-        premake.build(workspace="rive", targets=["rive"], configuration="default")
+        if self.settings.os == "Windows":
+            # The ambient GnuWin32 make 3.81 runs recipe commands through a shell with a short
+            # command-line limit; rive links ~730 objects, so premake's inline archive command
+            # ("$(AR) ... obj1 obj2 ...") overflows and truncates a path mid-argument. Rewrite it
+            # to collect the objects into a response file -- via find, which takes the object dir
+            # as a single short argument -- that the archiver reads with @. premake emits the
+            # same GNU-ar LINKCMD for both toolsets, but llvm-ar (clang) wants -rcs over *.o
+            # while lib.exe (msc) wants -out: over *.obj (premake's msc/gmake archive is broken).
+            if self.settings.compiler == "clang":
+                obj_glob, archiver = "*.o", '$(AR) -rcs "$@" @"$@.rsp"'
+            else:
+                obj_glob, archiver = "*.obj", '$(AR) -out:"$@" @"$@.rsp"'
+            replace_in_file(
+                self, self.folders.build / "rive.make",
+                'LINKCMD = $(AR) -rcs "$@" $(OBJECTS)',
+                f'LINKCMD = find $(OBJDIR) -name \'{obj_glob}\' > "$@.rsp" && {archiver}',
+                strict=False)
+
+        build_env = Environment()
+        if self.settings.os == "Windows":
+            # make (GnuWin32 3.81) runs recipe commands via Git-bash sh, whose POSIX path
+            # conversion mangles cl.exe's /I and /D flags (e.g. /D_UNICODE -> C:/.../D_UNICODE).
+            # Disable it so the msc toolset's flags survive. Harmless for the clang toolset,
+            # whose -I/-D flags are never converted.
+            build_env.define("MSYS_NO_PATHCONV", "1")
+            build_env.define("MSYS2_ARG_CONV_EXCL", "*")
+        with build_env.vars(self).apply():
+            premake.build(workspace="rive", targets=["rive"], configuration="default")
 
     def package(self):
         copy(self, "LICENSE", src=self.folders.source, dst=self.folders.package / "licenses")

@@ -169,8 +169,17 @@ class AutotoolsToolchain:
                 self.extra_cflags.append(gcc_toolchain_flag)
                 self.extra_cxxflags.append(gcc_toolchain_flag)
             if _tc.front_kind == "clang-cl":
-                # Explicit /imsvc + /libpath: rather than INCLUDE/LIB, which clang-cl and
-                # lld-link split on ';' even on POSIX build machines.
+                # clang-cl disables C++ exceptions by default; /EHsc would be mangled into a
+                # path by msys2/cygwin bash, so pass the frontend flags directly (they start
+                # with '-' and survive conversion). CMake drives clang-cl with /EHsc natively.
+                self.extra_cxxflags += ["-Xclang", "-fcxx-exceptions", "-Xclang", "-fexceptions"]
+            elif _tc.front_kind == "msvc":
+                self.extra_cxxflags.append("/EHsc")
+            if _tc.front_kind == "clang-cl" and str(recipe.settings_build.os) != "Windows":
+                # Cross-compiling to Windows from a non-Windows host: clang-cl/lld-link can't
+                # read the ';'-separated INCLUDE/LIB set for a Windows toolchain, so pass the
+                # CRT+SDK dirs explicitly. On a Windows host they ride INCLUDE/LIB instead;
+                # /libpath: on the clang-cl command line would be taken as an input file.
                 for d in _tc.msvc_include_dirs:
                     self.extra_cflags.append(f"/imsvc{d}")
                     self.extra_cxxflags.append(f"/imsvc{d}")
@@ -390,7 +399,9 @@ class AutotoolsToolchain:
                         if comp in _tc.compilers:
                             env.define(env_var, cast(str, unix_path(self._recipe, _tc.compilers[comp])))
                 for env_var, exe in (
-                        ("AR", _tc.lib if _tc.front_kind in ("msvc", "clang-cl") else _tc.ar),
+                        # clang-cl uses the GNU-style llvm-ar (make/libtool drive it with
+                        # `ar cru`); only the real cl.exe front needs lib.exe.
+                        ("AR", _tc.lib if _tc.front_kind == "msvc" else _tc.ar),
                         ("RANLIB", _tc.ranlib), ("NM", _tc.nm), ("STRIP", _tc.strip),
                         ("OBJCOPY", _tc.objcopy), ("LD", _tc.linker)):
                     if exe:

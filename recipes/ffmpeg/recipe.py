@@ -488,8 +488,21 @@ class Recipe(RecipeBase[_Options]):
             # unlike other tools that use the PKG_CONFIG environment variable
             # if we are aware the user has requested a specific pkg-config, we pass it to the configure script
             args.append(f"--pkg-config={unix_path(self, pkg_config)}")
-        if is_msvc(self):
+        if is_msvc(self) or self._is_clang_cl:
+            # clang-cl is an MSVC-ABI, cl.exe-flag-compatible compiler (uses /Fo, links via the
+            # MSVC CRT), so ffmpeg must treat it with the msvc toolchain conventions; --cc above
+            # still points it at clang-cl. Without this ffmpeg drives it as GNU clang and its
+            # compiler probes fail (e.g. the /Fo temp path isn't handled for a native compiler).
             args.append("--toolchain=msvc")
+            # ffmpeg's x86 asm emits 32-bit absolute (ADDR32) relocations against static tables
+            # (e.g. ff_h264_cabac_tables); the MSVC linker rejects those in a large-address-aware
+            # image (LNK2017 / LNK1165), so link the programs into the low 2 GB.
+            args.append("--extra-ldexeflags=-LARGEADDRESSAWARE:NO")
+        if is_msvc(self):
+            # ffmpeg uses C11 <stdatomic.h>; cl.exe gates it behind this flag (VS 2022 17.5+) --
+            # otherwise vcruntime_c11_stdatomic.h errors "C atomic support is not enabled".
+            # clang-cl supports C11 atomics unconditionally, so this is cl.exe-only.
+            tc.extra_cflags.append("-experimental:c11atomics")
             if not check_min_vs(self, "190", raise_invalid=False):
                 # Visual Studio 2013 (and earlier) doesn't support "inline" keyword for C (only for C++)
                 tc.extra_defines.append("inline=__inline")
@@ -532,8 +545,10 @@ class Recipe(RecipeBase[_Options]):
         tc.configure_args.extend(args)
         tc.generate()
 
-        if is_msvc(self):
-            # Custom AutotoolsDeps for cl like compilers
+        if is_msvc(self) or self._is_clang_cl:
+            # Custom AutotoolsDeps for cl like compilers (clang-cl included, since it also runs
+            # under --toolchain=msvc and links cl-style with -LIBPATH:). Without this ffmpeg's
+            # dependency link probes can't find the .lib search paths (e.g. "libmp3lame not found").
             # workaround for upstream issue 12784
             includedirs: list[str] = []
             defines: list[str] = []
@@ -553,7 +568,19 @@ class Recipe(RecipeBase[_Options]):
                 cflags.extend(deps_cpp_info.cflags)
 
             env = Environment()
-            env.append("CPPFLAGS", [f"-I{unix_path(self, p)}" for p in includedirs] + [f"-D{d}" for d in defines])
+            # cl.exe searches its -I paths before the INCLUDE env var (where the hermetic Windows
+            # SDK rides), so ffmpeg's own module headers must be on -I too. A bare
+            # `#include "parser.h"` from libavcodec/hevc/parser.c (there is no parser.h in hevc/)
+            # otherwise falls through to the SDK's um/parser.h, whose `#define _PARSER_H` and
+            # generic macros shadow libavcodec/parser.h and break the HEVC parser
+            # (ParseContext/HEVCParserContext undeclared). Putting libavcodec on -I makes ffmpeg's
+            # header win. Safe: libavcodec has no header colliding with a std/CRT angle-bracket
+            # include. clang-cl is unaffected either way (it puts the SDK on low-priority -imsvc).
+            own_include_dirs = [self.folders.source / "libavcodec"]
+            env.append("CPPFLAGS",
+                       [f"-I{unix_path(self, str(p))}" for p in own_include_dirs]
+                       + [f"-I{unix_path(self, p)}" for p in includedirs]
+                       + [f"-D{d}" for d in defines])
             env.append("LDFLAGS", [f"-LIBPATH:{unix_path(self, p)}" for p in libdirs] + linkflags)
             env.append("CXXFLAGS", cxxflags)
             env.append("CFLAGS", cflags)
@@ -571,6 +598,16 @@ class Recipe(RecipeBase[_Options]):
         env_pkg = Environment()
         env_pkg.prepend_path("PKG_CONFIG_PATH", self.folders.generators)
         env_pkg.vars(self, scope="build").save_script("pkgconfigpath")
+
+        if self.settings.os == "Windows":
+            # ffmpeg's configure mktemp's its compiler-probe files under msys2's /tmp, which the
+            # native clang-cl/cl.exe cannot resolve. Point TMPDIR at the build folder instead, as
+            # a DRIVE-style msys2 path (/d/o3de/...): msys2's arg conversion rewrites those to
+            # Windows paths for the native compiler exactly as it does the -I flags, whereas a
+            # plain Windows path (D:/...) or /tmp gets mangled or left unconverted at the -Fo flag.
+            env_tmp = Environment()
+            env_tmp.define("TMPDIR", unix_path(self, str(self.folders.build)))
+            env_tmp.vars(self, scope="build").save_script("ffmpeg_tmpdir")
 
         if self.options.with_ssl == "openssl":
             openssl_cpp = self.dependencies["openssl"].info.aggregated_components()
@@ -838,6 +875,10 @@ class Recipe(RecipeBase[_Options]):
             "with_xlib": ["avdevice"],
             "with_whisper": ["avfilter"],
         }
+
+    @property
+    def _is_clang_cl(self):
+        return self.settings.os == "Windows" and self.settings.compiler == "clang"
 
     @property
     def _target_arch(self):

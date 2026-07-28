@@ -133,6 +133,14 @@ class Recipe(RecipeBase[_Options]):
             env.define("CC", "cl")
             env.define("CXX", "cl")
             env.define("LD", "link")
+            # openssl's VC config archives with lib.exe's /out: syntax; without this the AR from
+            # the clang toolchain env is GNU llvm-ar, which rejects the /-style options. Match the
+            # cl.exe toolchain with lib.exe (from the msvc package, on PATH).
+            env.define("AR", "lib")
+            # openssl compiles with /Zi and jom runs cl.exe in parallel; without /FS the parallel
+            # processes collide writing ossl_static.pdb (fatal error C1041). Force synchronous PDB
+            # access. (-FS is the dash spelling cl.exe accepts, avoiding any /-flag arg mangling.)
+            tc.extra_cflags.append("-FS")
         env.define_path("PERL", self._perl)
         if self.settings.compiler == "apple-clang":
             xcrun = XCRun(self)

@@ -69,6 +69,10 @@ class Recipe(RecipeBase):
                     ])
         if self.settings.os == "Windows":
             tc.configure_args.append("ac_cv_func__set_invalid_parameter_handler=yes")
+            # gnulib's getrandom calls BCryptGenRandom but its library probe misfires for the MSVC-style driver,
+            # leaving bcrypt off the link line, add it explicitly. It goes in LIBS (placed after the source) not LDFLAGS,
+            # as a leading input clang-cl would name the output after bcrypt and configure's compiler check would fail.
+            tc.configure_args.append("LIBS=bcrypt.lib")
         env = tc.environment()
         # help2man trick
         env.prepend_path("PATH", self.folders.source)

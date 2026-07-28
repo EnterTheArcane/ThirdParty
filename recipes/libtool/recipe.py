@@ -63,7 +63,11 @@ class Recipe(RecipeBase[_Options]):
         tc.configure_args.extend(
             [
                 "--datarootdir=${prefix}/res",
-                "--enable-shared",
+                # libtool 2.6.2 doesn't know clang-cl, so it stays in GNU mode and links the
+                # libltdl DLL with -shared, which lld-link can't turn into a valid DLL
+                # (subsystem/entry). libtool the tool doesn't need libltdl.dll, so build it
+                # static-only for clang; the msvc path still gets the shared lib.
+                "--disable-shared" if self._is_clang_cl else "--enable-shared",
                 "--enable-static",
                 "--enable-ltdl-install",
             ])
@@ -76,10 +80,11 @@ class Recipe(RecipeBase[_Options]):
             env.define("CXX", "cl -nologo")
             env.define("AR", f'{ar_wrapper} "lib -nologo"')
 
-            # Disable Fortran detection to handle issue with VS 2022
-            # See: https://savannah.gnu.org/patch/?9313#comment1
-            # In the future this could be removed if a new version fixes this
-            # upstream
+        # Disable Fortran detection to handle issue with VS 2022
+        # See: https://savannah.gnu.org/patch/?9313#comment1
+        # In the future this could be removed if a new version fixes this
+        # upstream
+        if is_msvc(self) or self._is_clang_cl:
             env.define("F77", "no")
             env.define("FC", "no")
         tc.generate(env)
@@ -167,6 +172,10 @@ class Recipe(RecipeBase[_Options]):
         self.info.buildenv.append_path("AUTOMAKE_RECIPE_INCLUDES", libtool_aclocal_dir)
         self.info.runenv.append_path("ACLOCAL_PATH", libtool_aclocal_dir)
         self.info.runenv.append_path("AUTOMAKE_RECIPE_INCLUDES", libtool_aclocal_dir)
+
+    @property
+    def _is_clang_cl(self):
+        return self.settings.os == "Windows" and self.settings.compiler == "clang"
 
     @property
     def _datarootdir(self):

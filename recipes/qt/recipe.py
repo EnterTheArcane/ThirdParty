@@ -1589,7 +1589,10 @@ class Recipe(RecipeBase[_Options]):
                 "Visual Studio": "win32-msvc",
                 "msvc": "win32-msvc",
                 "gcc": "win32-g++",
-                "clang": "win32-clang-g++",
+                # Our Windows clang is clang-cl (MSVC ABI), so use the clang-msvc mkspec (which
+                # includes win32-msvc's qplatformdefs). win32-clang-g++ is the MinGW-clang spec
+                # and pulls in POSIX headers like <unistd.h> that clang-cl cannot satisfy.
+                "clang": "win32-clang-msvc",
             }.get(str(self.settings.compiler))
 
         elif self.settings.os == "WindowsStore":

@@ -28,6 +28,14 @@ class Recipe(RecipeBase[_Options]):
         # so fall back to Jolt's always-available CPU compute implementation.
         return self.settings.os == "Linux" and str(self.settings_build.arch) == "X64"
 
+    @property
+    def _use_dx12(self):
+        # Jolt's DX12 GPU-compute backend compiles its HLSL shaders at build time, but the
+        # shader step relies on an ambient system dxc and a relative include path that can't
+        # find the *Bindings.h headers in an out-of-source build. Until a hermetic dxc +
+        # correct include path are wired up, fall back to Jolt's CPU compute implementation.
+        return False
+
     def requirements(self):
         self.requires_tool("cmake")
         if self._use_vulkan:
@@ -54,7 +62,7 @@ class Recipe(RecipeBase[_Options]):
         tc.cache_variables["ENABLE_OBJECT_STREAM"] = True
         # Use the native GPU compute backend where the complete shader toolchain is
         # available, while retaining Jolt's CPU implementation as a fallback.
-        tc.cache_variables["JPH_USE_DX12"] = self.settings.os == "Windows"
+        tc.cache_variables["JPH_USE_DX12"] = self._use_dx12
         tc.cache_variables["JPH_USE_VK"] = self._use_vulkan
         tc.cache_variables["JPH_USE_MTL"] = False
         tc.cache_variables["JPH_USE_CPU_COMPUTE"] = True
@@ -91,7 +99,7 @@ class Recipe(RecipeBase[_Options]):
         self.info.set_property("cmake_file_name", "Jolt")
         self.info.set_property("cmake_target_name", "Jolt::Jolt")
         self.info.defines = ["JPH_OBJECT_STREAM", "JPH_USE_CPU_COMPUTE"]
-        if self.settings.os == "Windows":
+        if self._use_dx12:
             self.info.defines.append("JPH_USE_DX12")
             self.info.system_libs.extend(["dxgi", "d3d12", "d3dcompiler", "dxguid"])
         elif self.settings.os == "Linux":
@@ -104,9 +112,14 @@ class Recipe(RecipeBase[_Options]):
         if self.settings.arch in ["X64"]:
             self.info.defines.extend(
                 [
-                    "JPH_USE_AVX2", "JPH_USE_AVX", "JPH_USE_SSE4_1",
-                    "JPH_USE_SSE4_2", "JPH_USE_LZCNT", "JPH_USE_TZCNT",
-                    "JPH_USE_F16C", "JPH_USE_FMADD",
+                    "JPH_USE_AVX2",
+                    "JPH_USE_AVX",
+                    "JPH_USE_SSE4_1",
+                    "JPH_USE_SSE4_2",
+                    "JPH_USE_LZCNT",
+                    "JPH_USE_TZCNT",
+                    "JPH_USE_F16C",
+                    "JPH_USE_FMADD",
                 ])
         if is_msvc(self):
             self.info.defines.append("JPH_FLOATING_POINT_EXCEPTIONS_ENABLED")

@@ -1,6 +1,6 @@
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
-from thirdparty.files import copy, get, rmdir
+from thirdparty.files import copy, get, replace_in_file, rmdir
 from thirdparty.scm import GithubRepository, Version
 
 
@@ -28,12 +28,19 @@ class Recipe(RecipeBase[_Options]):
             sha256="3799ca9924d3125038880367bf1468e53a1b7e3686a934f098b7e1d286cdb80e",
             destination=self.folders.source,
             strip_root=True)
+        # Upstream writes the range with two dots (3.1..3.18), which CMake reads as the single
+        # version 3.1 (invalid range syntax) - so policies stay at 3.1 and CMP0091 is OLD, which
+        # the recipe toolchain rejects (it needs CMP0091 NEW for CMAKE_MSVC_RUNTIME_LIBRARY).
+        # Rewrite it as a real 3.5...3.18 range: 3.5 clears CMake 4.x's floor, 3.18 makes
+        # CMP0091 NEW.
+        replace_in_file(
+            self, self.folders.source / "CMakeLists.txt",
+            "cmake_minimum_required (VERSION 3.1..3.18)",
+            "cmake_minimum_required (VERSION 3.5...3.18)")
 
     def generate(self):
         tc = CMakeToolchain(self)
         tc.variables["BUILD_SHARED_LIBS"] = self.options.shared
-        # libsndfile 1.2.2 still declares cmake_minimum_required < 3.5, which CMake 4.x rejects.
-        tc.cache_variables["CMAKE_POLICY_VERSION_MINIMUM"] = "3.5"
         tc.variables["ENABLE_EXTERNAL_LIBS"] = False
         tc.variables["ENABLE_MPEG"] = False
         tc.variables["BUILD_PROGRAMS"] = False

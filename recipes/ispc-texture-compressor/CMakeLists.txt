@@ -86,6 +86,9 @@ if(WIN32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|x64")
         _WIN32_WINNT=0x0600
         _WIN7_PLATFORM_UPDATE
         _CRT_STDIO_ARBITRARY_WIDE_SPECIFIERS
+        # clang rejects the tools' brace-init of XMMATRIX/__m128 (MSVC-only); scalar
+        # DirectXMath makes those types aggregate-initializable.
+        $<$<CXX_COMPILER_ID:Clang>:_XM_NO_INTRINSICS_>
     )
     target_link_libraries(DirectXTex PRIVATE d3d11.lib dxgi.lib d3dcompiler.lib uuid.lib)
 
@@ -102,6 +105,7 @@ if(WIN32 AND CMAKE_SYSTEM_PROCESSOR MATCHES "AMD64|x86_64|x64")
             _UNICODE UNICODE
             _WIN32_WINNT=0x0600
             _CONSOLE
+            $<$<CXX_COMPILER_ID:Clang>:_XM_NO_INTRINSICS_>
         )
         target_link_libraries(${tool} PRIVATE DirectXTex ole32.lib windowscodecs.lib uuid.lib)
     endforeach()

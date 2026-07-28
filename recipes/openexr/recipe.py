@@ -48,6 +48,13 @@ class Recipe(RecipeBase[_Options]):
         tc.variables["BUILD_TESTING"] = False
         tc.variables["BUILD_WEBSITE"] = False
         tc.variables["DOCS"] = False
+        if self.settings.compiler == "clang" and self.settings.os == "Windows":
+            # internal_zip.c defines IMF_HAVE_SSE4_1 whenever _MSC_VER is set (which clang-cl is),
+            # compiling the SSE4.1/SSSE3 `reconstruct` as the only x86 path -- so the x64 build
+            # already assumes SSE4.1. cl.exe emits those intrinsics implicitly; clang needs the
+            # target feature. -msse4.1 implies ssse3 (for _mm_shuffle_epi8).
+            tc.extra_cflags.append("-msse4.1")
+            tc.extra_cxxflags.append("-msse4.1")
         tc.generate()
 
         deps = CMakeDeps(self)

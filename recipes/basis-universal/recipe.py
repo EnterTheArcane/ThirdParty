@@ -43,6 +43,11 @@ class Recipe(RecipeBase[_Options]):
         tc.variables["BASISU_ZSTD"] = True
         tc.variables["BASISU_EXAMPLES"] = False
         tc.variables["BASISU_OPENCL"] = False
+        if self.options.with_sse and self.settings.os == "Windows" and self.settings.compiler == "clang":
+            # basis_universal's CMakeLists treats clang-cl as MSVC and skips the -msse4.1 it
+            # adds for other compilers; clang still needs the target feature for the intrinsics.
+            tc.extra_cflags.append("-msse4.1")
+            tc.extra_cxxflags.append("-msse4.1")
         tc.generate()
 
     def build(self):
@@ -67,3 +72,4 @@ class Recipe(RecipeBase[_Options]):
             self.info.defines = ["BASISU_NO_ITERATOR_DEBUG_LEVEL"]
         elif self.settings.os in ["Linux", "FreeBSD"]:
             self.info.system_libs = ["m", "pthread"]
+                    

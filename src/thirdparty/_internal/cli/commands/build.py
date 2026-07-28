@@ -1,6 +1,7 @@
 import argparse
 import fnmatch
 import os
+import shutil
 import sys
 import time
 from collections import OrderedDict
@@ -633,8 +634,13 @@ def _build_recipe(
     # that only understand conf (meson/premake/nmake, cmake-presets) keep working.
     _tc = _find_toolchain(recipe)
     if _tc is not None and not _tc.cmake_toolchain_file:
-        if not recipe.conf.tools.build.compiler_executables and _tc.compilers:
-            recipe.conf.tools.build.compiler_executables = cast("dict[Any, Any]", dict(_tc.compilers))
+        if _tc.compilers:
+            # Seed per language, not all-or-nothing: a tool dependency may already have
+            # contributed one entry (e.g. nasm sets asm=nasm), which must not suppress seeding
+            # the contract's c/cpp/etc. Existing entries (tool- or user-provided) still win.
+            _merged = dict(_tc.compilers)
+            _merged.update(recipe.conf.tools.build.compiler_executables or {})
+            recipe.conf.tools.build.compiler_executables = cast("dict[Any, Any]", _merged)
         if not recipe.conf.tools.build.sysroot and _tc.sysroot:
             recipe.conf.tools.build.sysroot = _tc.sysroot
 
@@ -730,6 +736,21 @@ def _build_recipe(
                 raise
             finally:
                 os.chdir(_orig_cwd_pkg)
+        # For clang-cl on Windows, autotools/make recipes archive with GNU llvm-ar and emit
+        # `libfoo.a`. clang-cl targets the MSVC ABI, so consumers that link by bare name (ffmpeg's
+        # -lfoo, pkg-config, MSVC-style linkers) look for `foo.lib` / `libfoo.lib`. Emit .lib
+        # aliases beside each .a so those consumers resolve them; CMakeDeps links by full path and
+        # is unaffected. Non-destructive (the .a stays); CMake recipes emit .lib directly (no-op).
+        if (not generate_only and str(recipe.settings.os) == "Windows"
+                and str(recipe.settings.compiler) == "clang"):
+            for _archive in Path(recipe.folders.package).rglob("*.a"):
+                _alias_names = {f"{_archive.stem}.lib"}
+                if _archive.stem.startswith("lib"):
+                    _alias_names.add(f"{_archive.stem[3:]}.lib")
+                for _alias in _alias_names:
+                    _alias_path = _archive.with_name(_alias)
+                    if not _alias_path.exists():
+                        shutil.copyfile(_archive, _alias_path)
         # Write the completion marker only after both build() and package() succeed.
         build_dir.mkdir(parents=True, exist_ok=True)
         (build_dir / _COMPLETE_MARKER).write_text("")

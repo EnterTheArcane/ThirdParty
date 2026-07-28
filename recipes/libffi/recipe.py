@@ -87,7 +87,17 @@ class Recipe(RecipeBase[_Options]):
                 elif self.settings.arch == "ARM":
                     architecture_flag = "-marm64"
             elif self.settings.compiler == "clang":
+                # -clang-cl selects the compiler; the arch flag is still needed so msvcc.sh
+                # picks ml64/armasm64 for the .asm files (default is the 32-bit ml, absent here).
                 architecture_flag = "-clang-cl"
+                if self.settings.arch == "X64":
+                    architecture_flag += " -m64"
+                elif self.settings.arch == "ARM":
+                    architecture_flag += " -marm64"
+                # clang-cl is MSVC-ABI compatible, but configure.host only sets MSVC=1
+                # (and so picks the MASM win64_intel.S over the ELF/GAS win64.S that ml64 can't assemble)
+                # when the vendor is "microsoft", clang-cl is detected as "clang".
+                tc.configure_args.append("ax_cv_c_compiler_vendor=microsoft")
 
             compile_wrapper = unix_path(self, self.folders.source / "msvcc.sh")
             if architecture_flag:
@@ -140,7 +150,10 @@ class Recipe(RecipeBase[_Options]):
         rmdir(self, self.folders.package / "share")
 
     def package_info(self):
-        self.info.libs = ["{}ffi".format("lib" if is_msvc(self) else "")]
+        # On Windows the library is built as libffi.lib (lib-prefixed) with both cl and
+        # clang-cl; only Unix drops the prefix (link -lffi). Key the prefix on the OS, not
+        # the compiler, so clang-cl consumers get the right name too.
+        self.info.libs = ["{}ffi".format("lib" if self.settings.os == "Windows" else "")]
         self.info.set_property("pkg_config_name", "libffi")
         if not self.options.shared:
             static_define = "FFI_STATIC_BUILD"

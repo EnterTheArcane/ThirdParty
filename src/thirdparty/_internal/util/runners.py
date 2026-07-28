@@ -48,8 +48,17 @@ def run_command(command: str, stdout: IO[Any] | None = None, stderr: IO[Any] | N
     err = subprocess.PIPE if isinstance(stderr, StringIO) else stderr
 
     with pyinstaller_bundle_env_cleaned():
+        # Hardened/sandboxed Windows hosts often set NoDefaultCurrentDirectoryInExePath=1, which
+        # stops the shell from resolving an executable in the current directory. Build systems
+        # legitimately run helpers from the build cwd (e.g. tcl's nmake compiles nmakehlp.exe into
+        # win/ and then invokes it by bare name; the same pattern appears in other nmake builds),
+        # so those builds fail with "'nmakehlp' is not recognized" even though the exe exists.
+        # Drop the variable for build subprocesses (the build owns its cwd, so cwd-exe search is safe).
+        child_env = os.environ.copy()
+        for _key in [k for k in child_env if k.lower() == "nodefaultcurrentdirectoryinexepath"]:
+            child_env.pop(_key, None)
         try:
-            proc = subprocess.Popen(command, shell=shell, stdout=out, stderr=err, cwd=cwd)
+            proc = subprocess.Popen(command, shell=shell, stdout=out, stderr=err, cwd=cwd, stdin=subprocess.DEVNULL, env=child_env)
         except Exception as e:
             raise RecipeException("Error while running cmd\nError: %s" % (str(e)))
 

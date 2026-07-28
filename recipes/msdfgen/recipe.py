@@ -40,6 +40,21 @@ class Recipe(RecipeBase[_Options]):
             strip_root=True)
         apply_patches(self)
 
+        if self.settings.compiler == "clang":
+            # msdfgen.rc and the resource.h it includes are UTF-16: clang-cl's -E preprocessing
+            # (step 1 of CMake's cmake_llvm_rc) rejects the UTF-16 BOM, and llvm-rc then rejects
+            # the non-ASCII author name in the non-Unicode VERSIONINFO strings. Re-encode both to
+            # ASCII (transliterating accents, e.g. Chlumský -> Chlumsky) so both stages accept
+            # them. cl.exe's rc.exe reads UTF-16 fine, so this is clang-only.
+            import unicodedata
+            for name in ("msdfgen.rc", "resource.h"):
+                path = self.folders.source / name
+                data = path.read_bytes()
+                if data.startswith(b"\xff\xfe"):
+                    text = data.decode("utf-16")
+                    text = unicodedata.normalize("NFKD", text).encode("ascii", "ignore").decode("ascii")
+                    path.write_text(text, encoding="ascii")
+
     def generate(self):
         tc = CMakeToolchain(self)
         tc.cache_variables["MSDFGEN_BUILD_MSDFGEN_STANDALONE"] = self.options.utility

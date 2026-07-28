@@ -6,7 +6,6 @@ from thirdparty.errors import RecipeInvalidConfiguration
 
 
 _LLVM_HOSTS = {("Windows", "X64"), ("Windows", "ARM"), ("Linux", "X64"), ("Linux", "ARM"), ("Mac", "ARM")}
-
 _WINDOWS_TRIPLES = {"X64": "x86_64-pc-windows-msvc", "ARM": "aarch64-pc-windows-msvc"}
 _LINUX_TRIPLES = {"X64": "x86_64-linux-gnu", "ARM": "aarch64-linux-gnu"}
 
@@ -69,7 +68,8 @@ class Recipe(RecipeBase):
                 "rc": str(llvm_bin / f"llvm-rc{exe}"),
             }
             self.info.toolchain.linker = str(llvm_bin / f"lld-link{exe}")
-            self.info.toolchain.ar = str(llvm_bin / f"llvm-lib{exe}")
+            self.info.toolchain.ar = str(llvm_bin / f"llvm-ar{exe}")
+            self.info.toolchain.ranlib = str(llvm_bin / f"llvm-ranlib{exe}")
             self.info.toolchain.lib = str(llvm_bin / f"llvm-lib{exe}")
             self.info.toolchain.mt = str(llvm_bin / f"llvm-mt{exe}")
             self.info.toolchain.nm = str(llvm_bin / f"llvm-nm{exe}")
@@ -83,6 +83,13 @@ class Recipe(RecipeBase):
             tools_version = self._llvm_tools_version(llvm_bin.parent)
             if tools_version:
                 self.info.toolchain.msbuild_properties["LLVMToolsVersion"] = tools_version
+            # The ClangCL toolset compiles with clang-cl but still links against the MSVC
+            # CRT/STL and uses its headers/import libs, so MSBuild's Microsoft.CppBuild
+            # targets must resolve the MSVC toolset. Merge the msvc package's MSBuild props
+            # (VCToolsInstallDir/VCToolsVersion) so the toolset is found there rather than in
+            # the payload-only msbuild package.
+            msvc_props = self.dependencies["msvc"].info.toolchain.msbuild_properties or {}
+            self.info.toolchain.msbuild_properties.update(msvc_props)
         else:
             self.info.toolchain.front_kind = "clang"
             self.info.toolchain.compilers = {

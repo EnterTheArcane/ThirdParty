@@ -78,6 +78,13 @@ class Recipe(RecipeBase[_Options]):
             sha256="9616cbdbbfcb1420b3261cd280a047d74ab0a249825e577b0e2dd310e22f6b83",
             destination=self.folders.source,
             strip_root=True)
+        if self.settings.compiler == "clang":
+            # onnxruntime.rc's VERSIONINFO uses the octal escapes \251 (©) and \256 (®); clang's
+            # llvm-rc rejects them as "Non-ASCII 8-bit codepoint ... in a non-Unicode string"
+            # (cl.exe's rc.exe accepts them via its codepage). ASCII-ize for clang; cl.exe keeps ©/®.
+            _rc = self.folders.source / "onnxruntime" / "core" / "dll" / "onnxruntime.rc"
+            replace_in_file(self, _rc, "\\251", "(C)", strict=False)
+            replace_in_file(self, _rc, "\\256", "(R)", strict=False)
         # Replace onnxruntime's FetchContent dependency logic with find_package(... CONFIG).
         copy(self, "onnxruntime_external_deps.cmake",
              src=self.folders.recipe / "cmake",
@@ -103,6 +110,39 @@ class Recipe(RecipeBase[_Options]):
             '"$<$<COMPILE_LANGUAGE:CUDA>:SHELL:--compiler-options /sdl>" '
             '"$<$<COMPILE_LANGUAGE:CXX,C>:/sdl>")',
             '')
+        # MLAS's Windows branch adds many *_avx2 / *_avx512 sources to onnxruntime_mlas with NO
+        # SIMD compile flag -- it relies on cl.exe emitting AVX/AVX2/AVX512 intrinsics without a
+        # target feature. clang-cl refuses them ("_mm256_*/_mm512_* requires 'avx2'/'avx512f'").
+        # After the Windows source setup, give each such .cpp the matching -m flags by SIMD level
+        # in its name (the flagless C++ use lowercase avx2/avx512; the MASM .asm use capital "Avx"
+        # so they don't match and keep going to ml64). The call sites are CPU-dispatched at runtime,
+        # so enabling the feature at compile time is safe. clang-cl only; cl.exe is untouched.
+        replace_in_file(
+            self, self.folders.source / "cmake" / "onnxruntime_mlas.cmake",
+            "elseif(MSVC)\n  setup_mlas_source_for_windows()",
+            "elseif(MSVC)\n  setup_mlas_source_for_windows()\n"
+            "  if(CMAKE_CXX_COMPILER_ID MATCHES \"Clang\")\n"
+            "    get_target_property(_mlas_clang_srcs onnxruntime_mlas SOURCES)\n"
+            "    foreach(_src ${_mlas_clang_srcs})\n"
+            "      if(_src MATCHES \"amx\")\n"
+            "        set_source_files_properties(${_src} PROPERTIES COMPILE_FLAGS "
+            "\"-mamx-tile -mamx-int8 -mfma -mavx512bw -mavx512dq -mavx512vl -mavx512f\")\n"
+            "      elseif(_src MATCHES \"avx512\")\n"
+            "        set_source_files_properties(${_src} PROPERTIES COMPILE_FLAGS "
+            "\"-mfma -mavx512vnni -mavx512bw -mavx512dq -mavx512vl -mavx512f\")\n"
+            "      elseif(_src MATCHES \"avx2\")\n"
+            "        set_source_files_properties(${_src} PROPERTIES COMPILE_FLAGS "
+            "\"-mavx2 -mfma -mf16c -mavxvnni\")\n"
+            "      elseif(_src MATCHES \"avx\")\n"
+            "        set_source_files_properties(${_src} PROPERTIES COMPILE_FLAGS \"-mavx\")\n"
+            "      elseif(_src MATCHES \"sse41\")\n"
+            "        set_source_files_properties(${_src} PROPERTIES COMPILE_FLAGS \"-msse4.1\")\n"
+            "      elseif(_src MATCHES \"ssse3\")\n"
+            "        set_source_files_properties(${_src} PROPERTIES COMPILE_FLAGS \"-mssse3\")\n"
+            "      endif()\n"
+            "    endforeach()\n"
+            "  endif()",
+            strict=False)
 
     def generate(self):
         protobuf = self.dependencies["protobuf"].options
@@ -139,6 +179,13 @@ class Recipe(RecipeBase[_Options]):
             tc.extra_cxxflags.append("/wd4996")
         else:
             tc.extra_cxxflags.append("-Wno-deprecated-declarations")
+        if self.settings.os == "Windows" and self.settings.compiler == "clang":
+            # spin_pause.cc compiles the WAITPKG intrinsic _tpause under `#if defined(_WIN32)`,
+            # which clang-cl satisfies -- but clang refuses the intrinsic without the target
+            # feature (cl.exe implies it). Enable it; the call itself stays guarded at runtime by
+            # CPUIDInfo::HasTPAUSE(), so non-WAITPKG CPUs never execute it.
+            tc.extra_cflags.append("-mwaitpkg")
+            tc.extra_cxxflags.append("-mwaitpkg")
         tc.generate()
 
         deps = CMakeDeps(self)

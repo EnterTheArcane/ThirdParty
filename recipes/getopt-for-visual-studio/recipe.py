@@ -1,5 +1,5 @@
 from thirdparty import RecipeBase
-from thirdparty.files import apply_patches, copy, get, load, save
+from thirdparty.files import apply_patches, copy, get, load, replace_in_file, save
 from thirdparty.scm import GithubRepository, Version
 
 
@@ -20,6 +20,14 @@ class Recipe(RecipeBase):
             destination=self.folders.source,
             strip_root=True)
         apply_patches(self)
+        # `struct option` is first named inside these prototypes (prototype scope) but defined
+        # later at file scope; clang treats those as distinct types and rejects the definitions
+        # as conflicting (MSVC does not). A file-scope forward declaration unifies them.
+        replace_in_file(
+            self, self.folders.source / "getopt.h",
+            "static int getopt_internal(int, char * const *, const char *,",
+            "struct option;\nstatic int getopt_internal(int, char * const *, const char *,",
+            strict=False)
 
     def package(self):
         save(self, self.folders.package / "licenses" / "LICENSE", self._license_text)

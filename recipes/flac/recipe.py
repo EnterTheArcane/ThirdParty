@@ -50,6 +50,14 @@ class Recipe(RecipeBase[_Options]):
             self.folders.source / "src" / "share" / "getopt" / "CMakeLists.txt",
             "find_package(Intl)",
             "")
+        # The bundled getopt redeclares getenv() without __cdecl/dllimport, which clang rejects
+        # as conflicting with the UCRT declaration (MSVC tolerates it); use the real header.
+        replace_in_file(
+            self,
+            self.folders.source / "src" / "share" / "getopt" / "getopt.c",
+            "extern char *getenv (const char * name);",
+            "#include <stdlib.h>",
+            strict=False)
         cmake = CMake(self)
         cmake.configure()
         cmake.build()

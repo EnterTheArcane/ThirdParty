@@ -1,3 +1,4 @@
+import glob
 import os
 from pathlib import Path
 from typing import cast
@@ -11,6 +12,7 @@ from thirdparty.autotools import Autotools, AutotoolsDeps, AutotoolsToolchain
 from thirdparty.scm import GnuFtp
 from thirdparty.microsoft import is_msvc, unix_path
 from thirdparty.scm import Version
+from thirdparty.shell import run
 
 
 class _Options(RecipeOptions):
@@ -189,6 +191,26 @@ class Recipe(RecipeBase[_Options]):
                 self, self.folders.build / "intl" / "Makefile",
                 "WOE32_LIBADD = libintl.res.lo", "WOE32_LIBADD =", strict=False)
         autotools.make()
+
+        if self.settings.os == "Windows":
+            # libtool builds the static gnuintl.lib WITHOUT merging its gnulib-lib/libgnu.la
+            # convenience-lib objects (tsearch, glthread lock/threadlib, windows-rwlock) -- its
+            # MSVC-style archiver path can't extract a convenience .la -- leaving dcigettext's
+            # references to libintl_tfind / libintl_glwthread_rwlock_* undefined, so every
+            # consumer (glib's meson intl dep) fails to link. Fold those objects into the archive.
+            # Affects cl.exe and clang-cl alike.
+            ar = "llvm-lib" if self._is_clang_cl else "lib"
+            libs_dir = self.folders.build / "intl" / ".libs"
+            gnu_objs = glob.glob(
+                str(self.folders.build / "intl" / "gnulib-lib" / "**" / "libgnu_la-*.obj"),
+                recursive=True)
+            if (libs_dir / "gnuintl.lib").is_file() and gnu_objs:
+                # cd so -out: takes a relative name (msys2 doesn't path-convert -out: values);
+                # the object paths are absolute drive-style, which msys2 does convert.
+                obj_args = " ".join(unix_path(self, o) for o in gnu_objs)
+                run(self, f'cd "{unix_path(self, str(libs_dir))}" && '
+                          f'{ar} -out:gnuintl_full.lib gnuintl.lib {obj_args} && '
+                          f'mv -f gnuintl_full.lib gnuintl.lib')
 
     def package(self):
         dest_lib_dir = self.folders.package / "lib"

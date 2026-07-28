@@ -44,6 +44,62 @@ class Recipe(RecipeBase[_Options]):
             'set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS} /W3")',
             'set(_PXR_CXX_FLAGS "${_PXR_CXX_FLAGS}")',
             strict=False)
+        # _disable_warning() emits /wd${flag} whenever CMake's MSVC is set, but clang-cl sets
+        # MSVC while the flags it feeds come from the gcc/clang defaults as warning *names*
+        # (deprecated, unused-local-typedefs, ...). /wd expects a number, so clang-cl errors
+        # ("invalid integral value ... in '/wdunused-local-typedefs'"). Route clang through the
+        # -Wno-<name> branch (which clang-cl accepts); real cl.exe keeps /wd.
+        replace_in_file(
+            self,
+            self.folders.source / "cmake" / "defaults" / "CXXHelpers.cmake",
+            "function(_disable_warning flag)\n    if(MSVC)",
+            'function(_disable_warning flag)\n'
+            '    if(MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES "Clang")',
+            strict=False)
+        # For clang-cl, CMAKE_CXX_COMPILER_ID is "Clang" so CXXDefaults.cmake includes
+        # clangdefaults but NOT msvcdefaults, dropping the Windows preprocessor defines. Most
+        # importantly NOMINMAX: without it <windows.h> defines min()/max() macros that break
+        # std::min/std::max (stackTrace.cpp: "expected unqualified-id"). Add the same defines
+        # msvcdefaults supplies (minus the cl-only compiler flags) on the clang+MSVC path.
+        replace_in_file(
+            self,
+            self.folders.source / "cmake" / "defaults" / "CXXDefaults.cmake",
+            'elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")\n    include(clangdefaults)',
+            'elseif ("${CMAKE_CXX_COMPILER_ID}" MATCHES "Clang")\n'
+            '    include(clangdefaults)\n'
+            '    if (MSVC)\n'
+            '        _add_define("NOMINMAX")\n'
+            '        _add_define("WIN32_LEAN_AND_MEAN")\n'
+            '        _add_define("_CRT_SECURE_NO_WARNINGS")\n'
+            '        _add_define("_CRT_NONSTDC_NO_WARNINGS")\n'
+            '        _add_define("_SCL_SECURE_NO_WARNINGS")\n'
+            '        _add_define("_SILENCE_CXX17_ITERATOR_BASE_CLASS_DEPRECATION_WARNING")\n'
+            '        _add_define("BOOST_ALL_NO_LIB")\n'
+            '        _add_define("OPENEXR_DLL")\n'
+            '    endif()')
+        # USD's arch layer detects the compiler by checking __clang__ before _MSC_VER, so
+        # clang-cl (which defines both) becomes ARCH_COMPILER_CLANG and takes the Unix-clang
+        # path throughout arch/ - POSIX strerror_r, <cxxabi.h> demangling, the
+        # __attribute__((constructor)) mechanism, etc. - none of which exist on the MSVC ABI.
+        # clang-cl is MSVC-ABI, so classify it as ARCH_COMPILER_MSVC (it supports the MSVC
+        # intrinsics/pragmas/__declspec those branches use); this fixes the whole arch layer at
+        # once (attributes, errno, demangle, mallocHook, ...). mingw-clang (no _MSC_VER) still
+        # resolves to ARCH_COMPILER_CLANG.
+        replace_in_file(
+            self,
+            self.folders.source / "pxr" / "base" / "arch" / "defines.h",
+            "#if defined(__clang__)\n#define ARCH_COMPILER_CLANG",
+            "#if defined(__clang__) && !defined(_MSC_VER)\n#define ARCH_COMPILER_CLANG")
+        # Classifying clang-cl as ARCH_COMPILER_MSVC (above) also switched tf's preprocessor
+        # metaprogramming to the MSVC-traditional path, but clang-cl uses a standard-conforming
+        # preprocessor - the traditional TF_PP_* variadic tricks then fail ("pasting formed
+        # 'TF_PP_FE_10(', an invalid preprocessing token"). Keep clang-cl on the standard path;
+        # only real cl.exe (no __clang__) uses the traditional preprocessor workarounds.
+        replace_in_file(
+            self,
+            self.folders.source / "pxr" / "base" / "arch" / "defines.h",
+            "#if defined(ARCH_COMPILER_MSVC)\n    #if !defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL",
+            "#if defined(ARCH_COMPILER_MSVC) && !defined(__clang__)\n    #if !defined(_MSVC_TRADITIONAL) || _MSVC_TRADITIONAL")
 
     def generate(self):
         tc = CMakeToolchain(self)

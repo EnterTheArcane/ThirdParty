@@ -191,6 +191,15 @@ class Recipe(RecipeBase[_Options]):
             destination=self.folders.source,
             strip_root=True)
 
+        if self.settings.compiler == "clang":
+            # The version resource's LegalCopyright uses the \xA9 (©) escape. clang-cl's llvm-rc
+            # reads it as codepoint 169 and rejects it in a non-Unicode string ("Non-ASCII 8-bit
+            # codepoint"), whereas cl.exe's rc.exe accepts it. Swap in an ASCII "(C)" so the .rc
+            # compiles with llvm-rc; msvc keeps the © glyph.
+            replace_in_file(
+                self, self.folders.source / "include" / "assimp" / "revision.h.in",
+                '"\\xA9 2006-2023"', '"(C) 2006-2023"', strict=False)
+
         # Don't force several compiler and linker flags
         for pattern in [
             "-fPIC",

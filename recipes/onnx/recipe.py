@@ -55,6 +55,27 @@ class Recipe(RecipeBase[_Options]):
             destination=self.folders.source,
             strip_root=True)
 
+        # INVALID_HANDLE_VALUE is ((HANDLE)(LONG_PTR)-1), a reinterpret_cast that is not a valid
+        # non-type template argument: clang rejects it ("non-type template argument is not a
+        # constant expression") where cl.exe is lenient, so ScopedHandle can't reuse the
+        # ScopedResource<Invalid,Close> template. Swap in an equivalent hand-rolled RAII wrapper
+        # (standard C++, accepted by both compilers).
+        replace_in_file(
+            self,
+            self.folders.source / "onnx" / "common" / "scoped_resource.h",
+            "using ScopedHandle = ScopedResource<INVALID_HANDLE_VALUE, close_handle>;",
+            "class ScopedHandle {\n"
+            "  HANDLE val_;\n"
+            " public:\n"
+            "  explicit ScopedHandle(HANDLE v) : val_(v) {}\n"
+            "  ~ScopedHandle() { if (val_ != INVALID_HANDLE_VALUE) close_handle(val_); }\n"
+            "  HANDLE get() const { return val_; }\n"
+            "  HANDLE release() { HANDLE tmp = val_; val_ = INVALID_HANDLE_VALUE; return tmp; }\n"
+            "  ScopedHandle(const ScopedHandle&) = delete;\n"
+            "  ScopedHandle& operator=(const ScopedHandle&) = delete;\n"
+            "};",
+            strict=False)
+
         # Use conan-provided abseil (CONFIG) and treat protobuf's utf8_range as optional
         # (it is a private static component only exposed for static protobuf builds).
         cmakelists = self.folders.source / "CMakeLists.txt"

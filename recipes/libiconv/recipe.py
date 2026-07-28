@@ -91,11 +91,10 @@ class Recipe(RecipeBase[_Options]):
         self._apply_resource_patch()
         autotools = Autotools(self)
         autotools.configure()
-        if self.settings.os == "Windows" and self.settings.arch == "ARM":
-            # GNU windres cannot emit ARM64 COFF objects (its only PE targets are
-            # pe-x86-64 / pe-i386), so the compiled version resource would be an x64
-            # object and fail to link into the ARM64 DLL/exe (LNK1112). Drop the
-            # purely-cosmetic version resource from the link on ARM64.
+        if self.settings.os == "Windows" and (self.settings.arch == "ARM" or self._is_clang_cl):
+            # ARM64: GNU windres cannot emit ARM64 COFF (its only PE targets are pe-x86-64 / pe-i386), so the resource object would be x64 and fail to link (LNK1112).
+            # clang-cl: the windres-style rule drives llvm-windres, whose clang preprocessor doesn't read INCLUDE and so can't find the SDK's winver.h.
+            # Either way drop the purely-cosmetic version resource from the link.
             for makefile, obj in (("lib", "libiconv.res.lo"), ("src", "iconv.res")):
                 replace_in_file(
                     self, self.folders.build / makefile / "Makefile",
@@ -132,7 +131,10 @@ class Recipe(RecipeBase[_Options]):
     def _msvc_tools(self) -> tuple[str, str, str]:
         compilers = self.conf.tools.build.compiler_executables
         compiler = compilers.get("c") or compilers.get("cpp")
-        return (os.fspath(compiler) if compiler else "clang-cl", "llvm-lib", "lld-link") if self._is_clang_cl else ("cl", "lib", "link")
+        # POSIX path: the compile wrapper runs in msys2 bash, which eats the backslashes of a
+        # native Windows path (D:\...\clang-cl.exe -> D:...clang-cl.exe: command not found).
+        cc = unix_path(self, os.fspath(compiler)) if compiler else "clang-cl"
+        return (cc, "llvm-lib", "lld-link") if self._is_clang_cl else ("cl", "lib", "link")
 
     def _apply_resource_patch(self):
         if self.settings.arch == "x86":

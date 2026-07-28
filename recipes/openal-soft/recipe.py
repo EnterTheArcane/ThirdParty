@@ -6,7 +6,7 @@ from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.apple import is_apple_os
 from thirdparty.build import stdcpp_library
 from thirdparty.cmake import CMake, CMakeToolchain
-from thirdparty.files import apply_patches, collect_libs, copy, get, rmdir, save
+from thirdparty.files import apply_patches, collect_libs, copy, get, replace_in_file, rmdir, save
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -43,6 +43,15 @@ class Recipe(RecipeBase[_Options]):
             destination=self.folders.source,
             strip_root=True)
         apply_patches(self)
+        if self.settings.os == "Windows":
+            # clang-cl's [[clang::nonblocking]] becomes part of member-function-pointer types
+            # and breaks MSVC STL traits (std::_Is_memfunptr); it's only a static-analysis aid,
+            # so drop it on Windows.
+            replace_in_file(
+                self, self.folders.source / "common" / "opthelpers.h",
+                "#define NONBLOCKING [[clang::nonblocking]]",
+                "#define NONBLOCKING",
+                strict=False)
 
     def generate(self):
         tc = CMakeToolchain(self)

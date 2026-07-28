@@ -54,6 +54,17 @@ class Recipe(RecipeBase[_Options]):
             strict=False)
         for module in ("expat", "lcms2", "pystring", "yaml-cpp", "Imath", "minizip-ng"):
             rm(self, f"Find{module}.cmake", self.folders.source / "share" / "cmake" / "modules")
+        # clang-cl defines _MSC_VER but, unlike cl.exe, has no SVML _mm_pow_ps intrinsic. OCIO
+        # gates its precise-power SIMD path (and the matching myPower template specialisations)
+        # only on _MSC_VER >= 1920, so clang-cl wrongly enters it and fails to compile
+        # _mm_pow_ps. Exclude clang from all four guards so it falls back to ssePower / the
+        # scalar renderer; cl.exe still takes the SVML path.
+        replace_in_file(
+            self,
+            self.folders.source / "src" / "OpenColorIO" / "ops" / "fixedfunction" / "FixedFunctionOpCPU.cpp",
+            "#if (_MSC_VER >= 1920) && (OCIO_USE_AVX)",
+            "#if (_MSC_VER >= 1920) && !defined(__clang__) && (OCIO_USE_AVX)",
+            strict=False)
 
     def generate(self):
         tc = CMakeToolchain(self)
@@ -74,8 +85,10 @@ class Recipe(RecipeBase[_Options]):
         # avoid downloading dependencies
         tc.variables["OCIO_INSTALL_EXT_PACKAGE"] = "NONE"
 
-        if is_msvc(self) and not self.options.shared:
-            # define any value because ifndef is used
+        if self.settings.os == "Windows" and not self.options.shared:
+            # define any value because ifndef is used. Needed for clang-cl too (it defines
+            # _MSC_VER), so key on the OS rather than the compiler, otherwise OCIOEXPORT stays
+            # __declspec(dllimport) and consumers can't link the static library.
             tc.variables["OpenColorIO_SKIP_IMPORTS"] = True
 
         tc.cache_variables["CMAKE_POLICY_DEFAULT_CMP0077"] = "NEW"
@@ -126,5 +139,9 @@ class Recipe(RecipeBase[_Options]):
         if is_apple_os(self):
             self.info.frameworks.extend(["Foundation", "IOKit", "ColorSync", "CoreGraphics"])
 
-        if is_msvc(self) and not self.options.shared:
+        if self.settings.os == "Windows" and not self.options.shared:
+            # OCIO's headers decorate the API with __declspec(dllimport) unless
+            # OpenColorIO_SKIP_IMPORTS is defined; a static build must publish it so consumers
+            # (e.g. openimageio) reference the plain symbols. Needed for clang-cl too, not just
+            # cl.exe (both define _MSC_VER).
             self.info.defines.append("OpenColorIO_SKIP_IMPORTS")

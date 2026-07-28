@@ -62,6 +62,12 @@ class Recipe(RecipeBase):
     def toolchain_settings(self, settings: Settings):
         settings.compiler = "msvc"
         settings.compiler_runtime = "dynamic"
+        # cl.exe's version drives cppstd flag emission and premake's VS-action selection. The
+        # MSVC toolset minor tracks cl's minor (toolset 14.44 -> cl 19.44), and the conan-style
+        # MSVC version drops cl's last digit: 19.44 -> "194" (VS 2022 17.10+). Without this the
+        # version is None, so cppstd_flag returns "" and premake computes action "vsNone".
+        _minor = int(self.version.split(".")[1])
+        settings.compiler_version = f"19{_minor // 10}"
 
     def requirements(self):
         self.requires("windows-sdk")
@@ -139,6 +145,7 @@ class Recipe(RecipeBase):
             self.info.buildenv.append_path("LIB", root / d)
 
         bin_dir = root / "bin" / _HOST_DIR[str(self.settings_build.arch)] / lib_arch
+        self.info.buildenv.prepend_path("PATH", str(bin_dir))
         if not (bin_dir / "cl.exe").exists():
             return
         self.info.toolchain.family = "msvc"
@@ -161,7 +168,18 @@ class Recipe(RecipeBase):
         self.info.toolchain.msvc_include_dirs += [str(d) for d in sdk.info.includedirs]
         self.info.toolchain.msvc_lib_dirs += [str(d) for d in sdk.info.libdirs]
         self.info.toolchain.msbuild_toolset = "v143"
-        self.info.toolchain.msbuild_properties = {"VCToolsVersion": self.version}
+        # MSBuild's Microsoft.CppBuild targets locate the MSVC toolset via VCToolsInstallDir
+        # (and concatenate it directly, e.g. $(VCToolsInstallDir)include), so it needs a
+        # trailing separator. In this hermetic layout the package root *is* the toolset dir
+        # (bin/Host*/, include/, lib/<arch>/); publish it so both the v143 and the ClangCL
+        # toolsets resolve the CRT/STL/linker here instead of the payload-only msbuild pkg.
+        vc_tools_install_dir = str(root)
+        if not vc_tools_install_dir.endswith(("\\", "/")):
+            vc_tools_install_dir += "\\"
+        self.info.toolchain.msbuild_properties = {
+            "VCToolsVersion": self.version,
+            "VCToolsInstallDir": vc_tools_install_dir,
+        }
 
 
 def _load_manifest(recipe: RecipeBase) -> dict:

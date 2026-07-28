@@ -3,7 +3,7 @@ from typing import Literal
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.build import cross_building
 from thirdparty.cmake import CMakeToolchain, CMake
-from thirdparty.files import apply_patches, load, save, get, copy
+from thirdparty.files import apply_patches, load, save, get, copy, replace_in_file
 from thirdparty.microsoft import msvc_runtime_flag, is_msvc
 from thirdparty.scm import GithubRepository, Version
 
@@ -49,6 +49,11 @@ class Recipe(RecipeBase[_Options]):
             # can't link into the aarch64 build. Fall back to CPU-only physx when cross-compiling.
             if cross_building(self):
                 self.options.gpu = False
+            # nvcc on Windows doesn't accept clang-cl as its host compiler, and driving it with
+            # the packaged cl.exe still trips nvcc's host-OS detection in this hermetic setup.
+            # GPU physx on Windows needs the msvc toolchain; fall back to CPU-only under clang.
+            if self.settings.os == "Windows" and self.settings.compiler == "clang":
+                self.options.gpu = False
 
     def requirements(self):
         self.requires_tool("cmake")
@@ -82,6 +87,22 @@ class Recipe(RecipeBase[_Options]):
                 dst=self.folders.source / "physx" / "source" / "compiler" / "cmake" / platform)
 
         apply_patches(self)
+
+        if self.settings.os == "Windows" and self.settings.compiler == "clang":
+            # clang-cl reports MSVC-only flags (/MP, /d2Zi+) as unused and its /W4 warnings
+            # differ from cl.exe's; /WX would make all of those fatal. Drop warnings-as-errors
+            # for the clang build.
+            replace_in_file(
+                self,
+                self.folders.source / "physx" / "source" / "compiler" / "cmake" / "windows" / "CMakeLists.txt",
+                "/MP /WX /W4", "/MP /W4", strict=False)
+            # Some PhysX .rc files are UTF-16; llvm-rc preprocesses with clang, which only accepts
+            # UTF-8/ASCII source. Re-encode just the UTF-16 ones (others are already ASCII).
+            resource_dir = self.folders.source / "physx" / "source" / "compiler" / "windows" / "resource"
+            for rc in resource_dir.glob("*.rc"):
+                data = rc.read_bytes()
+                if data.startswith(b"\xff\xfe"):
+                    rc.write_text(data.decode("utf-16"), encoding="utf-8")
 
     def generate(self):
         tc = CMakeToolchain(self)

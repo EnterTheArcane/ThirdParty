@@ -103,6 +103,10 @@ class Recipe(RecipeBase[_Options]):
             replace_in_file(self, "Makefile.MSVC", " /GL", "", strict=False)
             replace_in_file(self, "Makefile.MSVC", " /LTCG", "", strict=False)
             replace_in_file(self, "Makefile.MSVC", "ADDL_OBJ = bufferoverflowU.lib", "", strict=False)
+            # LAME 4.0 removed the standalone mpglib decoder sources but left them in Makefile.MSVC's object lists.
+            # build the encoder-only static lib, matching the autotools path's --disable-decoder.
+            replace_in_file(self, "Makefile.MSVC", "lib: $(ASM_OBJ) libA libB", "lib: $(ASM_OBJ) libA", strict=False)
+            replace_in_file(self, "Makefile.MSVC", "$(ASM_OBJ) $(LIB_OBJ) $(HIP_OBJ)", "$(ASM_OBJ) $(LIB_OBJ)", strict=False)
             command = "nmake -f Makefile.MSVC comp=msvc"
             if self._is_clang_cl:
                 compilers_from_conf = self.conf.tools.build.compiler_executables

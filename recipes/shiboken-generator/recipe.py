@@ -1,4 +1,5 @@
 import os
+import shutil
 from pathlib import Path
 
 from thirdparty import RecipeBase
@@ -6,7 +7,7 @@ from thirdparty.build import cross_building
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
 from thirdparty.env import Environment, VirtualBuildEnv
 from thirdparty.errors import RecipeInvalidConfiguration
-from thirdparty.files import apply_patches, copy, get
+from thirdparty.files import apply_patches, copy, get, replace_in_file
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -44,12 +45,35 @@ class Recipe(RecipeBase):
             destination=self.folders.source,
             strip_root=True)
         apply_patches(self)
+        # shiboken skips the C++ wrapper for classes with a private (inaccessible) destructor -
+        # the wrapper's destructor would be implicitly deleted - but only when the generator is
+        # NOT built with MSVC. clang-cl defines _MSC_VER (so Qt sets Q_CC_MSVC) and the skip is
+        # wrongly disabled; the generated code is then compiled by clang-cl, which - unlike real
+        # cl.exe - rejects a deleted destructor overriding a non-deleted virtual one
+        # ("deleted function '~QClipboardWrapper' cannot override a non-deleted function"). Apply
+        # the skip for clang too, so private-dtor singletons (QClipboard, QNetworkInformation, ...)
+        # get no wrapper. This is the generator that produces every module's bindings, so the fix
+        # is global.
+        replace_in_file(
+            self,
+            self.folders.source / "sources" / "shiboken6_generator" / "ApiExtractor" / "abstractmetalang.cpp",
+            "#ifndef Q_CC_MSVC\n    // PYSIDE-504:",
+            "#if !defined(Q_CC_MSVC) || defined(Q_CC_CLANG)\n    // PYSIDE-504:")
 
     def generate(self):
         python = self.dependencies.build["cpython"]
         llvm = self.dependencies.build["llvm"]
         qt = self.dependencies.build["qt"]
         python_root, python_exe, python_include, python_library, _ = _python_layout(python)
+        if self.settings.os == "Windows":
+            # CMake's FindPython derives the Python version from the import-library filename and
+            # cannot parse the unversioned python3.lib the cpython recipe intentionally ships, so
+            # Development is reported missing. Point FindPython at a versioned-named copy in the
+            # build dir (the import lib still references python3.dll). See the cpython recipe.
+            major, minor = str(python.version).split(".")[:2]
+            versioned_lib = self.folders.build / f"python{major}{minor}.lib"
+            shutil.copy2(python_library, versioned_lib)
+            python_library = versioned_lib
         qt_root = qt.folders.package
         llvm_root = llvm.folders.package
 

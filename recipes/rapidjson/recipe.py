@@ -1,5 +1,5 @@
 from thirdparty import RecipeBase
-from thirdparty.files import apply_patches, get, copy
+from thirdparty.files import apply_patches, get, copy, replace_in_file
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -20,6 +20,16 @@ class Recipe(RecipeBase):
             strip_root=True,
             destination=self.folders.source)
         apply_patches(self)
+        # rapidjson only enables C++11 rvalue refs under clang when the STL is libc++ or
+        # libstdc++; clang-cl uses the MSVC STL (neither macro defined), so it disables the move
+        # constructor and code like `return doc;` (glTF2 in assimp) hits GenericDocument's private
+        # copy ctor. clang-cl always defines _MSC_VER, so accept that too. cl.exe never enters the
+        # __clang__ branch, so the MSVC build is unaffected.
+        replace_in_file(
+            self, self.folders.source / "include" / "rapidjson" / "rapidjson.h",
+            "    (defined(_LIBCPP_VERSION) || defined(__GLIBCXX__) && __GLIBCXX__ >= 20080306)",
+            "    (defined(_LIBCPP_VERSION) || defined(_MSC_VER) || defined(__GLIBCXX__) && __GLIBCXX__ >= 20080306)",
+            strict=False)
 
     def package(self):
         copy(self, pattern="license.txt", src=self.folders.source, dst=self.folders.package / "licenses")

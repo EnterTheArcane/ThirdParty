@@ -70,6 +70,15 @@ class CMake:
     def is_multi_configuration(self) -> bool:
         return is_multi_configuration(self._generator)
 
+    def _ninja_program(self) -> str | None:
+        for _req, dep in self._recipe.dependencies.build.items():
+            for bindir in dep.info.bindirs:
+                for name in ("ninja.exe", "ninja"):
+                    candidate = os.path.join(bindir, name)
+                    if os.path.isfile(candidate):
+                        return candidate.replace("\\", "/")
+        return None
+
     def configure(
         self,
         variables: dict[str, Any] | None = None,
@@ -132,6 +141,14 @@ class CMake:
         if not variables:
             variables = {}
         self._cache_variables.update(variables)
+
+        if (self._generator and "Ninja" in self._generator
+                and "CMAKE_MAKE_PROGRAM" not in self._cache_variables):
+            ninja = self._ninja_program()
+            if ninja:
+                # CMake 4.x fails to auto-detect ninja when a recipe forces a low
+                # CMAKE_POLICY_VERSION_MINIMUM; point it at the packaged ninja explicitly.
+                self._cache_variables["CMAKE_MAKE_PROGRAM"] = ninja
 
         arg_list.extend([f'-D{k}="{v}"' for k, v in self._cache_variables.items()])
 

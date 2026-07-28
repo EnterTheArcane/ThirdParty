@@ -155,7 +155,11 @@ class Recipe(RecipeBase[_Options]):
 
     def _lib_name(self, name: str) -> str:
         libname = name
-        if is_msvc(self) and not self.options.shared:
+        # CMake names the static libs "<name>-static" for cl.exe AND clang-cl (it sets MSVC=TRUE
+        # for clang-cl), so the declared lib name must carry the suffix for both or consumers
+        # (glib's pkg-config -lpcre2-8) look for the wrong file.
+        _clang_cl = self.settings.os == "Windows" and self.settings.compiler == "clang"
+        if (is_msvc(self) or _clang_cl) and not self.options.shared:
             libname += "-static"
         if self.settings.os == "Windows":
             if self.settings.build_type == "Debug":

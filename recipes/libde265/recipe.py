@@ -77,3 +77,17 @@ class Recipe(RecipeBase[_Options]):
         replace_in_file(
             self, self.folders.source / "CMakeLists.txt",
             "set(CMAKE_POSITION_INDEPENDENT_CODE ON)", "")
+        # clang-cl is detected as MSVC, so the x86_sse target misses the -msse4.1 that other
+        # compilers get; clang needs the target feature for the runtime-dispatched intrinsics.
+        replace_in_file(
+            self, self.folders.source / "libde265" / "x86" / "CMakeLists.txt",
+            "if(NOT MSVC)",
+            'if(NOT MSVC OR CMAKE_CXX_COMPILER_ID STREQUAL "Clang")',
+            strict=False)
+        # The bundled getopt declares getopt_internal with `char * const *` but defines it with
+        # `char **`; clang rejects the mismatch (MSVC tolerates it). Align the declaration.
+        replace_in_file(
+            self, self.folders.source / "extra" / "getopt_long.c",
+            "int getopt_internal __P((int, char * const *, const char *));",
+            "int getopt_internal __P((int, char **, const char *));",
+            strict=False)

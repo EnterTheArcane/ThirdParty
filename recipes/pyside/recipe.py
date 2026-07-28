@@ -79,6 +79,13 @@ class Recipe(RecipeBase):
 
         tc = CMakeToolchain(self)
         tc.variables["PYSIDE_SOURCE_DIR"] = self.folders.source.as_posix()
+        # Skip .pyi type-stub generation. That step imports the freshly-built PySide6 to
+        # introspect it, but PySide6/__init__.py's _additional_dll_directories only looks for
+        # libshiboken at the PySide superproject build layout (../shiboken6/libshiboken or a
+        # sibling shiboken6/) - neither exists here because shiboken is a separate recipe - so the
+        # import raises before any stub is written. The stubs are an IDE-only convenience and the
+        # runtime bindings are unaffected, so disable them (the supported DISABLE_PYI switch).
+        tc.variables["DISABLE_PYI"] = True
         tc.variables["BUILD_TESTS"] = False
         tc.variables["INSTALL_TESTS"] = False
         tc.variables["BUILD_DOCS"] = "no"
@@ -130,12 +137,19 @@ class Recipe(RecipeBase):
                 environment.define("CPATH", f"/usr/{triplet}/include")
                 environment.vars(self).save_script("buildenv_shiboken_target_headers")
         else:
+            # Even in a native build, FindPython on Windows derives the version from the import
+            # library filename and cannot parse the unversioned python3.lib the cpython recipe
+            # ships, so Development.Module is reported missing. Point it at a versioned-named copy
+            # (the same helper the cross path uses); the import lib still references python3.dll.
+            native_library = python_library
+            if self.settings.os == "Windows":
+                native_library = _versioned_python_library(self, python, python_library)
             for prefix in ("Python", "Python3"):
                 tc.variables[f"{prefix}_ROOT_DIR"] = python_root.as_posix()
                 tc.variables[f"{prefix}_FIND_STRATEGY"] = "LOCATION"
                 tc.variables[f"{prefix}_EXECUTABLE"] = python_exe.as_posix()
                 tc.variables[f"{prefix}_INCLUDE_DIR"] = python_include.as_posix()
-                tc.variables[f"{prefix}_LIBRARY"] = python_library.as_posix()
+                tc.variables[f"{prefix}_LIBRARY"] = native_library.as_posix()
                 if self.settings.os == "Windows":
                     tc.variables[f"{prefix}_FIND_REGISTRY"] = "NEVER"
             tc.variables["Shiboken6Tools_DIR"] = (

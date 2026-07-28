@@ -71,9 +71,11 @@ class VSRuntimeBlock(Block):
             {% set genexpr.str = genexpr.str +
                                     '$<$<CONFIG:' + config + '>:' + value|string + '>' %}
         {% endfor %}
-        cmake_policy(GET CMP0091 POLICY_CMP0091)
-        if(NOT "${POLICY_CMP0091}" STREQUAL NEW)
-            message(FATAL_ERROR "The CMake policy CMP0091 must be NEW, but is '${POLICY_CMP0091}'")
+        # CMAKE_MSVC_RUNTIME_LIBRARY is only honored under CMP0091 NEW; force it rather than
+        # error, since projects with a low cmake_minimum_required leave it OLD in the early
+        # toolchain scope even when the consumer passed CMAKE_POLICY_DEFAULT_CMP0091=NEW.
+        if(POLICY CMP0091)
+            cmake_policy(SET CMP0091 NEW)
         endif()
         message(STATUS "Recipe toolchain: Setting CMAKE_MSVC_RUNTIME_LIBRARY={{ genexpr.str  }}")
         set(CMAKE_MSVC_RUNTIME_LIBRARY "{{ genexpr.str }}")
@@ -1080,7 +1082,9 @@ class ToolchainProviderBlock(Block):
         return {
             "provider": str(settings.compiler_recipe),
             "linker": _p(tc.linker),
-            "ar": _p(tc.ar),
+            # MSVC-like compilers drive CMAKE_AR with lib.exe syntax (/OUT:), so use the
+            # MSVC-style archiver; GNU fronts use the GNU ar.
+            "ar": _p(tc.lib if tc.front_kind in ("clang-cl", "msvc") else tc.ar),
             "ranlib": _p(tc.ranlib),
             "mt": _p(tc.mt),
             "nm": _p(tc.nm),

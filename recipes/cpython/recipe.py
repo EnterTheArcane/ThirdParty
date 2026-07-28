@@ -17,7 +17,8 @@ from thirdparty.files import apply_patches, copy, get, load, mkdir, replace_in_f
 from thirdparty.autotools import Autotools, AutotoolsToolchain, AutotoolsDeps
 from thirdparty.pkgconfig import PkgConfigDeps
 from thirdparty.msbuild import MSBuild, MSBuildDeps, MSBuildToolchain
-from thirdparty.microsoft import is_msvc, msvc_runtime_flag, msvs_toolset
+from thirdparty.microsoft import msvc_runtime_flag, msvs_toolset
+from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty.scm import GithubRepository, Version
 from thirdparty.shell import run
 from thirdparty.build.cross_building import cross_building
@@ -50,7 +51,7 @@ class Recipe(RecipeBase[_Options]):
         return Version(repo.latest_release.removeprefix("v"))
 
     def configure(self):
-        if is_msvc(self):
+        if self._use_pcbuild:
             self.options.lto = False
             self.options.docstrings = False
             self.options.pymalloc = False
@@ -105,7 +106,7 @@ class Recipe(RecipeBase[_Options]):
             self.requires("ncurses")
         if self.options.with_lzma:
             self.requires("xz")
-        if not is_msvc(self) and not self.conf.tools.gnu.pkg_config:
+        if not self._use_pcbuild and not self.conf.tools.gnu.pkg_config:
             self.requires_tool("pkgconf")
         if self.settings.os == "Windows":
             self.requires_tool("msbuild")
@@ -126,7 +127,7 @@ class Recipe(RecipeBase[_Options]):
         VirtualBuildEnv(self).generate()
         VirtualRunEnv(self).generate(scope="build")
 
-        if is_msvc(self):
+        if self._use_pcbuild:
             # The msbuild generator only works with Visual Studio
             deps = MSBuildDeps(self)
             deps.generate()
@@ -139,7 +140,7 @@ class Recipe(RecipeBase[_Options]):
 
     def build(self):
         self._patch_sources()
-        if is_msvc(self):
+        if self._use_pcbuild:
             self._msvc_build()
         else:
             autotools = Autotools(self)
@@ -148,7 +149,7 @@ class Recipe(RecipeBase[_Options]):
 
     def package(self):
         copy(self, "LICENSE", src=self.folders.source, dst=self.folders.package / "licenses")
-        if is_msvc(self):
+        if self._use_pcbuild:
             if self.options.shared:
                 self._msvc_package_layout()
             else:
@@ -199,7 +200,7 @@ class Recipe(RecipeBase[_Options]):
 
     def package_info(self):
         # python component: "Build a C extension for Python"
-        if is_msvc(self):
+        if self._use_pcbuild:
             self.info.components["python"].includedirs = [os.path.join(self._msvc_install_subprefix, "include")]
             libdir = os.path.join(self._msvc_install_subprefix, "libs")
         else:
@@ -299,13 +300,13 @@ class Recipe(RecipeBase[_Options]):
             # TODO remove once Recipe 1.x is no longer supported
             self.output.info(f"Appending PYTHON environment variable: {python}")
 
-        if is_msvc(self):
+        if self._use_pcbuild:
             pythonhome = self.folders.package / "bin"
         else:
             pythonhome = self.folders.package
         self.info.conf.tools.cpython.pythonhome = pythonhome
 
-        pythonhome_required = is_msvc(self) or is_apple_os(self)
+        pythonhome_required = self._use_pcbuild or is_apple_os(self)
         self.info.conf.tools.cpython.module_requires_pythonhome = pythonhome_required
 
         python_root = self.folders.package
@@ -316,8 +317,16 @@ class Recipe(RecipeBase[_Options]):
         self.info.conf.tools.cpython.python_root = python_root
 
     @property
+    def _use_pcbuild(self) -> bool:
+        # On Windows both msvc and clang build through CPython's PCbuild/MSBuild solution;
+        # clang just selects the ClangCL platform toolset (via msvs_toolset), so every
+        # former is_msvc branch in this recipe is really "is this a Windows build". Only
+        # non-Windows targets use the autotools (./configure) path.
+        return self.settings.os == "Windows"
+
+    @property
     def _supports_modules(self):
-        return not is_msvc(self) or self.options.shared
+        return not self._use_pcbuild or self.options.shared
 
     @property
     def _version_suffix(self):
@@ -422,6 +431,18 @@ class Recipe(RecipeBase[_Options]):
             self, self.folders.source / "PCbuild" / "python.props",
             '<PyDllName Condition="$(PyDllName) == \'\'">python$(MajorVersionNumber)$(MinorVersionNumber)$(PyDebugExt)</PyDllName>',
             '<PyDllName Condition="$(PyDllName) == \'\'">python3$(PyDebugExt)</PyDllName>')
+        # Renaming the DLL/import library to python3 (above) breaks CPython's auto-link
+        # pragma: pyconfig.h makes every extension module link the versioned import lib
+        # (python314.lib) via `#pragma comment(lib, ...)`, but that name no longer exists,
+        # so the module links fail ("could not open 'python314.lib'" - the pragma fires for
+        # both cl.exe and clang-cl since both define _MSC_VER). pyconfig.h documents
+        # Py_NO_LINK_LIB to disable the pragma; define it for every project via the shared
+        # pyproject.props so extensions instead pick up python3.lib from the pythoncore
+        # project reference.
+        replace_in_file(
+            self, self.folders.source / "PCbuild" / "pyproject.props",
+            "<PreprocessorDefinitions>WIN32;",
+            "<PreprocessorDefinitions>WIN32;Py_NO_LINK_LIB;")
         replace_in_file(
             self, self.folders.source / "PC" / "layout" / "support" / "constants.py",
             'PYTHON_DLL_NAME = "python{}{}.dll".format(VER_MAJOR, VER_MINOR)',
@@ -748,7 +769,7 @@ class Recipe(RecipeBase[_Options]):
             'OPENSSL_LIBS="-lssl -lcrypto"',
             'OPENSSL_LIBS="-lssl -lcrypto -lz"',
             strict=False)
-        if is_msvc(self):
+        if self._use_pcbuild:
             runtime_library = {
                 "MT": "MultiThreaded",
                 "MTd": "MultiThreadedDebug",
@@ -812,7 +833,7 @@ class Recipe(RecipeBase[_Options]):
             f'<Import Project="{recipe_toolchain_props}" /><Import Project="python.props" />',
         )
 
-        if is_msvc(self):
+        if self._use_pcbuild:
             self._patch_msvc_projects()
 
     @property
@@ -875,7 +896,25 @@ class Recipe(RecipeBase[_Options]):
         sln = self.folders.source / "PCbuild" / "pcbuild.sln"
         # FIXME: Solution files do not pick up the toolset automatically.
         cmd = msbuild.command(sln, targets=projects)
-        run(self,f"{cmd} /p:PlatformToolset={msvs_toolset(self)} /p:SkipCopySSLDLL=true")
+        # Pass the toolchain contract's MSBuild properties (VCToolsInstallDir/VCToolsVersion
+        # for the hermetic MSVC toolset, plus LLVMInstallDir/LLVMToolsVersion for ClangCL) as
+        # *global* properties. They must be set before Microsoft.Cpp.props derives
+        # VCToolsInstallDir from VCInstallDir (which points at the payload-only msbuild
+        # package), and they must apply to every project in the solution - recipe_toolchain.props
+        # is imported only by pythoncore.vcxproj, and even there too late. Global /p: does both.
+        tc = find_toolchain(self)
+        toolchain_props = dict(tc.msbuild_properties) if tc and tc.msbuild_properties else {}
+
+        def quote(value: str) -> str:
+            # VCToolsInstallDir carries a trailing '\' (MSBuild concatenates it directly). A
+            # backslash right before the closing quote would escape it (\"), swallowing the
+            # rest of the command line, so double any trailing backslashes.
+            value = str(value)
+            trailing = len(value) - len(value.rstrip("\\"))
+            return value + "\\" * trailing
+
+        prop_args = " ".join(f'/p:{key}="{quote(value)}"' for key, value in toolchain_props.items())
+        run(self, f"{cmd} /p:PlatformToolset={msvs_toolset(self)} {prop_args} /p:SkipCopySSLDLL=true")
 
     @property
     def _msvc_artifacts_path(self):
@@ -890,7 +929,7 @@ class Recipe(RecipeBase[_Options]):
         return "bin"
 
     def _copy_essential_dlls(self):
-        if is_msvc(self):
+        if self._use_pcbuild:
             # Until MSVC builds support cross building, copy dll's of essential (shared) dependencies to python binary location.
             # These dll's are required when running the layout tool using the newly built python executable.
             dest_path = self.folders.build / self._msvc_artifacts_path
@@ -900,6 +939,19 @@ class Recipe(RecipeBase[_Options]):
                 copy(self, "*.dll", src=bin_path, dst=dest_path)
             for bin_path in self.dependencies["zlib"].info.bindirs:
                 copy(self, "*.dll", src=bin_path, dst=dest_path)
+            # The layout tool copies the MSVC runtime (vcruntime140.dll, msvcp140.dll) out of
+            # the build output (main.py rglobs the -b dir for vcruntime*.dll and errors if it
+            # finds none). A regular VS build drops it there via the redist; the hermetic
+            # clang-cl/PCbuild build does not, so stage it from the msvc toolchain package,
+            # whose bin/Host*/<target-arch>/ ships the redistributable runtime DLLs.
+            tc = find_toolchain(self)
+            vc_root = tc.msbuild_properties.get("VCToolsInstallDir") if tc and tc.msbuild_properties else None
+            if vc_root:
+                target_dir = "arm64" if str(self.settings.arch) == "ARM" else "x64"
+                for host_bin in Path(vc_root).glob(f"bin/Host*/{target_dir}"):
+                    copy(self, "vcruntime140*.dll", src=host_bin, dst=dest_path)
+                    copy(self, "msvcp140*.dll", src=host_bin, dst=dest_path)
+                    break
 
     def _msvc_package_layout(self):
         self._copy_essential_dlls()
@@ -1010,7 +1062,7 @@ class Recipe(RecipeBase[_Options]):
 
     @property
     def _cmake_module_path(self):
-        if is_msvc(self):
+        if self._use_pcbuild:
             # On Windows, `lib` is for Python modules, `libs` is for compiled objects.
             # Usually CMake modules are packaged with the latter.
             return os.path.join(self._msvc_install_subprefix, "libs", "cmake")
@@ -1051,7 +1103,7 @@ class Recipe(RecipeBase[_Options]):
             """)
 
         # In order for the package to be relocatable, these variables must be relative to the installed CMake file
-        if is_msvc(self):
+        if self._use_pcbuild:
             python_exe = "${CMAKE_CURRENT_LIST_DIR}/../../" + self._cpython_interpreter_name
             python_library = "${CMAKE_CURRENT_LIST_DIR}/../" + self._exact_lib_name
         else:
@@ -1072,7 +1124,7 @@ class Recipe(RecipeBase[_Options]):
     @property
     def _cpython_interpreter_name(self):
         python = f"python{self._version_suffix}"
-        if is_msvc(self) and self.settings.build_type == "Debug":
+        if self._use_pcbuild and self.settings.build_type == "Debug":
             python += "_d"
         if self.settings.os == "Windows":
             python += ".exe"
@@ -1091,7 +1143,7 @@ class Recipe(RecipeBase[_Options]):
 
     @property
     def _lib_name(self):
-        if is_msvc(self):
+        if self._use_pcbuild:
             if self.settings.build_type == "Debug":
                 lib_ext = "_d"
             else:

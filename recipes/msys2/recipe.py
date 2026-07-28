@@ -142,13 +142,13 @@ class Recipe(RecipeBase[_Options]):
                 self._kill_pacman()
 
                 # https://www.msys2.org/docs/ci/
-                run(self,f'bash -l -c "pacman {debug}--noconfirm --ask 20 -Syuu"')  # Core update (in case any core packages are outdated)
+                run(self,f'{self._bash} -l -c "pacman {debug}--noconfirm --ask 20 -Syuu"')  # Core update (in case any core packages are outdated)
                 self._kill_pacman()
-                run(self,f'bash -l -c "pacman {debug}--noconfirm --ask 20 -Syuu"')  # Normal update
+                run(self,f'{self._bash} -l -c "pacman {debug}--noconfirm --ask 20 -Syuu"')  # Normal update
                 self._kill_pacman()
-                run(self,f'bash -l -c "pacman {debug}-Rc dash --noconfirm"')
+                run(self,f'{self._bash} -l -c "pacman {debug}-Rc dash --noconfirm"')
             except RecipeException:
-                run(self,'bash -l -c "cat /var/log/pacman.log || echo nolog"')
+                run(self,f'{self._bash} -l -c "cat /var/log/pacman.log || echo nolog"')
                 self._kill_pacman()
                 raise
 
@@ -187,6 +187,14 @@ class Recipe(RecipeBase[_Options]):
         subdir = "msys64"  # top-level directoy in tarball
         return self.folders.source / subdir
 
+    @property
+    def _bash(self):
+        # Invoke the bundled bash by absolute path; a bare `bash` resolves to Git-for-Windows
+        # or WSL bash if either is on PATH, and those can't find msys2's pacman. Quote only
+        # when the path has a space (cmd mangles a line that starts with a quoted token).
+        exe = str(self._msys_dir / "usr" / "bin" / "bash.exe")
+        return f'"{exe}"' if " " in exe else exe
+
     def _do_build(self):
         packages: list[str] = []
         if self.options.packages:
@@ -198,11 +206,11 @@ class Recipe(RecipeBase[_Options]):
 
         with chdir(self, self._msys_dir / "usr" / "bin"):
             for package in packages:
-                run(self,f'bash -l -c "pacman -S {package} --noconfirm"')
+                run(self,f'{self._bash} -l -c "pacman -S {package} --noconfirm"')
             for package in ["pkgconf"]:
-                if run(self,f'bash -l -c "pacman -Qq {package}"', ignore_errors=True, quiet=True) == 0:
-                    run(self,f'bash -l -c "pacman -Rs -d -d {package} --noconfirm"')
-            run(self,f'bash -l -c "pacman -Scc --noconfirm"')
+                if run(self,f'{self._bash} -l -c "pacman -Qq {package}"', ignore_errors=True, quiet=True) == 0:
+                    run(self,f'{self._bash} -l -c "pacman -Rs -d -d {package} --noconfirm"')
+            run(self,f'{self._bash} -l -c "pacman -Scc --noconfirm"')
 
         self._kill_pacman()
 

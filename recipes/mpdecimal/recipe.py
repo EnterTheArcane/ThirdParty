@@ -1,3 +1,6 @@
+import re
+import shutil
+
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.apple import is_apple_os
 from thirdparty.build import cross_building
@@ -70,6 +73,35 @@ class Recipe(RecipeBase[_Options]):
 
     def build(self):
         apply_patches(self)
+        if self._is_clang_cl:
+            # mpdecimal.c's public helpers are defined inline but declared extern in the public
+            # header, so consumers (CPython's _decimal) expect out-of-line definitions in the
+            # library. clang emits none for them: the ALWAYS_INLINE ones expand to __forceinline
+            # (always_inline) under _MSC_VER and the rest use plain `inline` with C99 semantics.
+            # cl.exe emits COMDAT copies and GCC uses gnu89 inline, so upstream is fine, but
+            # clang-cl leaves the symbols undefined (undefined symbol mpd_isnan / mpd_isnormal).
+            # Neutralise inlining for these definitions so each becomes a normal external
+            # function (all live only in mpdecimal.c, so no multi-TU duplication; cl.exe and
+            # other compilers are untouched).
+            mpdecimal_c = self.folders.source / "libmpdec" / "mpdecimal.c"
+            replace_in_file(
+                self, mpdecimal_c,
+                "#if defined(_MSC_VER)\n  #define ALWAYS_INLINE __forceinline",
+                "#if defined(__clang__) && defined(_MSC_VER)\n  #define ALWAYS_INLINE\n"
+                "#elif defined(_MSC_VER)\n  #define ALWAYS_INLINE __forceinline")
+            # The remaining public helpers use the bare `inline` keyword (C99 -> no out-of-line
+            # copy under clang). Drop `inline` from each definition so the archive exports them.
+            for _ret_type, _func in (
+                ("mpd_uint_t", "mpd_msd"),
+                ("int", "mpd_exp_digits"),
+                ("int", "mpd_isnormal"),
+                ("int", "mpd_issubnormal"),
+                ("void", "mpd_setdigits"),
+            ):
+                replace_in_file(
+                    self, mpdecimal_c,
+                    f"inline {_ret_type}\n{_func}(",
+                    f"{_ret_type}\n{_func}(")
         # After patching, the per-library Makefile.vc WARN hardcodes /W4; drop it (the patch
         # rewrites this line, so it must run here rather than in source()) so the quiet -w wins.
         if is_msvc(self):
@@ -84,6 +116,8 @@ class Recipe(RecipeBase[_Options]):
             build_dir = self.folders.build
             autotools = Autotools(self)
             autotools.configure()
+            if self._is_clang_cl:
+                self._fix_static_obj_output(build_dir)
             # self.output.info(load(self, pathlib.Path("libmpdec", "Makefile")))
             libmpdec, libmpdecpp = self._target_names
             copy(self, "*", source_dir / "libmpdec", build_dir / "libmpdec")
@@ -100,7 +134,11 @@ class Recipe(RecipeBase[_Options]):
         if is_msvc(self):
             source_dir = self.folders.source
             distfolder = self._dist_folder
-            copy(self, "vc*.h", src=source_dir / "libmpdec", dst=pkg_dir / "include")
+            # mpdecimal ships pre-configured MSVC headers named mpdecimal{32,64}vc.h (vc is a
+            # suffix, not a prefix), which CPython's _decimal windows/ shim includes. The glob
+            # must therefore be *vc.h, not vc*.h -- the latter matches nothing, so the header
+            # never reached the package and _decimal failed with "cannot open mpdecimal64vc.h".
+            copy(self, "*vc.h", src=source_dir / "libmpdec", dst=pkg_dir / "include")
             copy(self, "*.h", src=distfolder, dst=pkg_dir / "include")
             if self.options.cxx:
                 copy(self, "*.hh", src=distfolder, dst=pkg_dir / "include")
@@ -112,6 +150,16 @@ class Recipe(RecipeBase[_Options]):
             mpdecdir = build_dir / "libmpdec"
             mpdecppdir = build_dir / "libmpdec++"
             copy(self, "mpdecimal.h", src=mpdecdir, dst=pkg_dir / "include")
+            if self.settings.os == "Windows":
+                # CPython's _decimal uses a windows/ shim that includes <mpdecimalNNvc.h>
+                # (the name mpdecimal's own MSVC build emits) whenever _MSC_VER is defined -
+                # which clang-cl does too. The autotools build only produces the configured
+                # mpdecimal.h, so also publish it under the vc name the shim expects (64-bit
+                # for our X64/ARM targets, 32-bit only for x86).
+                bits = "32" if str(self.settings.arch) in ("X86", "x86") else "64"
+                shutil.copyfile(
+                    pkg_dir / "include" / "mpdecimal.h",
+                    pkg_dir / "include" / f"mpdecimal{bits}vc.h")
             if self.options.cxx:
                 copy(self, "decimal.hh", src=source_dir / "libmpdec++", dst=pkg_dir / "include")
             builddirs = [mpdecdir]
@@ -197,6 +245,22 @@ class Recipe(RecipeBase[_Options]):
             else:
                 copy(self, f"libmpdec++-{self.version}.lib", libmpdecpp_folder, dist_folder)
             copy(self, "decimal.hh", libmpdecpp_folder, dist_folder)
+
+    @property
+    def _is_clang_cl(self):
+        return self.settings.os == "Windows" and self.settings.compiler == "clang"
+
+    def _fix_static_obj_output(self, base_dir):
+        # The static-lib rules compile with `-c foo.c` and no -o, relying on the GNU cc default
+        # of foo.o; clang-cl writes foo.obj instead, so the archive step can't find foo.o.
+        # Append an explicit -o (the shared-lib rules already do this). The Makefiles are
+        # generated out-of-source, so they live under the build dir.
+        for sub in ("libmpdec", "libmpdec++"):
+            makefile = base_dir / sub / "Makefile"
+            if makefile.is_file():
+                text = makefile.read_text(encoding="utf-8")
+                text = re.sub(r"(-c ([A-Za-z0-9_]+)\.(cc|c))$", r"\1 -o \2.o", text, flags=re.M)
+                makefile.write_text(text, encoding="utf-8")
 
     @property
     def _shared_suffix(self):

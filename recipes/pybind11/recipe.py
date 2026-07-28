@@ -50,7 +50,15 @@ class Recipe(RecipeBase):
         if self.settings.os == "Windows":
             py_exe = f"{python_root}/bin/python3.exe"
             py_inc = f"{python_root}/bin/include"
-            py_lib = f"{python_root}/bin/libs/python3.lib"
+            # FindPython derives the Python version from the import-library *filename*
+            # (it matches pythonXY / pythonX.Y) and cannot parse the unversioned python3.lib
+            # the cpython recipe intentionally ships, so Development.Module is reported missing.
+            # Expose a versioned-named copy in the build dir and point FindPython at it (mirrors
+            # the libpython copy below for the other platforms). The import lib still references
+            # python3.dll internally, so the built modules load the shipped runtime correctly.
+            versioned_lib = self.folders.build / f"python{major}{minor}.lib"
+            shutil.copy2(f"{python_root}/bin/libs/python3.lib", versioned_lib)
+            py_lib = versioned_lib.as_posix()
         else:
             extension = "dylib" if self.settings.os == "Mac" else "so"
             py_exe = f"{python_root}/bin/python3"

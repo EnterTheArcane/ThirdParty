@@ -59,6 +59,39 @@ class Recipe(RecipeBase[_Options]):
         # tcl's nmake rules.vc sets WARNINGS to -W3/-W4; blank the level so the quiet -w wins (D9025).
         replace_in_file(self, self.folders.source / "win" / "rules.vc", "= -W3", "=", strict=False)
         replace_in_file(self, self.folders.source / "win" / "rules.vc", "= -W4", "=", strict=False)
+        # tcl's bundled minizip ioapi.c has no Windows branch: it maps FTELLO_FUNC/FSEEKO_FUNC to
+        # POSIX ftello/fseeko(64), which the Windows CRT lacks. cl.exe only warns then fails to
+        # link; clang makes the implicit declaration a hard error. Add a _WIN32 branch using the
+        # MSVC 64-bit file APIs (_ftelli64/_fseeki64, in ucrt) -- correct for both compilers.
+        replace_in_file(
+            self, self.folders.source / "compat" / "zlib" / "contrib" / "minizip" / "ioapi.c",
+            "#if defined(__APPLE__) || defined(IOAPI_NO_64) || defined(__HAIKU__) || defined(MINIZIP_FOPEN_NO_64) || (defined(__ANDROID_API__) && __ANDROID_API__ < 24)",
+            "#if defined(_WIN32)\n"
+            "#define FOPEN_FUNC(filename, mode) fopen(filename, mode)\n"
+            "#define FTELLO_FUNC(stream) _ftelli64(stream)\n"
+            "#define FSEEKO_FUNC(stream, offset, origin) _fseeki64(stream, offset, origin)\n"
+            "#elif defined(__APPLE__) || defined(IOAPI_NO_64) || defined(__HAIKU__) || defined(MINIZIP_FOPEN_NO_64) || (defined(__ANDROID_API__) && __ANDROID_API__ < 24)",
+            strict=False)
+        # The host minizip tool is compiled with -DHAVE_DIRENT_H=1, forcing #include <dirent.h>
+        # (absent on Windows) for the directory-recursion path. tcl's build zips explicit files,
+        # not directories, so drop the define (guards both the include and opendir/readdir usage).
+        replace_in_file(
+            self, self.folders.source / "win" / "Makefile.in",
+            "-DMINIZIP_FOPEN_NO_64=1 -DHAVE_DIRENT_H=1 -I$(ZLIB_DIR)",
+            "-DMINIZIP_FOPEN_NO_64=1 -I$(ZLIB_DIR)",
+            strict=False)
+        # minizip.c carries its own FTELLO_FUNC/FSEEKO_FUNC block (separate from ioapi.c) that
+        # maps to POSIX ftello/fseeko under MINIZIP_FOPEN_NO_64. Add a _WIN32 branch using the
+        # MSVC 64-bit file APIs, same as ioapi.c above.
+        replace_in_file(
+            self, self.folders.source / "compat" / "zlib" / "contrib" / "minizip" / "minizip.c",
+            "#if defined(__APPLE__) || defined(__HAIKU__) || defined(MINIZIP_FOPEN_NO_64)",
+            "#if defined(_WIN32)\n"
+            "#define FOPEN_FUNC(filename, mode) fopen(filename, mode)\n"
+            "#define FTELLO_FUNC(stream) _ftelli64(stream)\n"
+            "#define FSEEKO_FUNC(stream, offset, origin) _fseeki64(stream, offset, origin)\n"
+            "#elif defined(__APPLE__) || defined(__HAIKU__) || defined(MINIZIP_FOPEN_NO_64)",
+            strict=False)
 
     def generate(self):
         if is_msvc(self):
@@ -129,6 +162,15 @@ class Recipe(RecipeBase[_Options]):
             rmdir(self, self.folders.package / "share")
             fix_apple_shared_install_name(self)
 
+        # Package the native minizip helper tcl builds for its own zipfs archive. Tk's
+        # autotools build needs a `zip`/minizip tool it does not ship (its release archive
+        # has no zlib source), so it reuses this one; keeping it in bin/ makes that
+        # dependency robust to build-dir cleanup. Guarded on existence (only the
+        # zipfs-enabled build paths produce it).
+        for minizip_name in ("minizip", "minizip.exe"):
+            if (self.folders.build / minizip_name).is_file():
+                copy(self, minizip_name, src=self.folders.build, dst=self.folders.package / "bin")
+
         # Relocatable tclConfig.sh
         tclConfigShPath = self.folders.package / "lib" / "tclConfig.sh"
         ## Comment out references to build folder
@@ -160,7 +202,10 @@ class Recipe(RecipeBase[_Options]):
         elif is_apple_os(self):
             self.info.frameworks.append("CoreFoundation")
 
-        if is_msvc(self) and not self.options.shared:
+        if self.settings.os == "Windows" and not self.options.shared:
+            # tcl.h decorates its API with __declspec(dllimport) on Windows unless STATIC_BUILD
+            # is defined; a static tcl must publish it so consumers (e.g. CPython's _tkinter)
+            # reference the plain symbols. Needed for clang-cl too, not just cl.exe.
             self.info.defines.append("STATIC_BUILD")
 
         tcl_version = Version(self.version)

@@ -1,7 +1,6 @@
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
 from thirdparty.files import apply_patches, copy, get
-from thirdparty.microsoft import is_msvc
 from thirdparty.scm import SourceForgeProject, Version
 
 
@@ -26,7 +25,9 @@ class Recipe(RecipeBase[_Options]):
 
     def requirements(self):
         self.requires_tool("cmake")
-        if is_msvc(self) and self.options.utils:
+        # CMake sets MSVC for clang-cl too, so its if(MSVC) find_package(getopt) runs on any
+        # Windows target (the MSVC CRT has no getopt), not just cl.exe.
+        if self.settings.os == "Windows" and self.options.utils:
             self.requires("getopt-for-visual-studio")
 
     def source(self):
@@ -44,7 +45,7 @@ class Recipe(RecipeBase[_Options]):
         tc.variables["UTILS"] = self.options.utils
         tc.generate()
 
-        if is_msvc(self):
+        if self.settings.os == "Windows" and self.options.utils:
             deps = CMakeDeps(self)
             deps.generate()
 
@@ -62,5 +63,5 @@ class Recipe(RecipeBase[_Options]):
         self.info.set_property("cmake_file_name", "GIF")
         self.info.set_property("cmake_target_name", "GIF::GIF")
         self.info.libs = ["gif"]
-        if is_msvc(self):
+        if self.settings.os == "Windows":
             self.info.defines.append("USE_GIF_DLL" if self.options.shared else "USE_GIF_LIB")

@@ -1,6 +1,6 @@
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
-from thirdparty.files import copy, get, rmdir
+from thirdparty.files import copy, get, rmdir, replace_in_file
 from thirdparty.microsoft import is_msvc
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
@@ -31,6 +31,22 @@ class Recipe(RecipeBase[_Options]):
             sha256="fb3ccf71af838ed2a42c6ea669308a2adaba115ae9d5862dfb1e2865b43eb5b8",
             destination=self.folders.source,
             strip_root=True)
+
+        if self.settings.compiler == "clang":
+            # clang-cl reports CMAKE_CXX_COMPILER_ID=Clang but CMake sets MSVC=TRUE, so openjph's
+            # per-file SIMD flag blocks take the `if (MSVC)` path (/arch:AVX*), which leaves the
+            # SSE4.1/SSSE3 sources with no target feature -- and clang (unlike cl.exe) refuses to
+            # emit those intrinsics without -msse4.1/-mssse3. Exclude clang from that gate so it
+            # uses the GNU -m<feature> flags per file, preserving openjph's runtime SIMD dispatch.
+            # cl.exe (id MSVC) keeps the /arch path.
+            for rel in ("src/core/CMakeLists.txt",
+                        "src/apps/ojph_compress/CMakeLists.txt",
+                        "src/apps/ojph_expand/CMakeLists.txt"):
+                replace_in_file(
+                    self, self.folders.source / rel,
+                    "# Set compilation flags\n      if (MSVC)",
+                    "# Set compilation flags\n      if (MSVC AND NOT CMAKE_CXX_COMPILER_ID MATCHES \"Clang\")",
+                    strict=False)
 
     def generate(self):
         tc = CMakeToolchain(self)
