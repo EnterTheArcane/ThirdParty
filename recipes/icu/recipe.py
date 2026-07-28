@@ -52,11 +52,11 @@ class Recipe(RecipeBase[_Options]):
         VirtualBuildEnv(self).generate()
 
         tc = AutotoolsToolchain(self)
-        if check_min_vs(self, "180", raise_invalid=False):
+        if is_msvc(self) and check_min_vs(self, "180", raise_invalid=False):
             tc.extra_cflags.append("-FS")
             tc.extra_cxxflags.append("-FS")
         if not self.settings.compiler_cxx_standard and is_msvc(self):
-            tc.extra_cxxflags.append(f"-std:c++17")
+            tc.extra_cxxflags.append("-std:c++17")
         if not self.options.shared:
             tc.extra_defines.append("U_STATIC_IMPLEMENTATION")
         if is_apple_os(self):

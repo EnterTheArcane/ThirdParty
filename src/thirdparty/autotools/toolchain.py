@@ -344,6 +344,28 @@ class AutotoolsToolchain:
         return self._filter_list_empty_fields(ret)
 
     @property
+    def cppflags(self) -> list[str]:
+        """Flags for CPPFLAGS - the defines plus the flags that select the header set.
+
+        Autoconf runs its preprocessor-only checks (``AC_PREPROC_IFELSE``, and every
+        ``AC_CHECK_HEADER`` that falls back to the preprocessor) as ``$CPP $CPPFLAGS`` -
+        CFLAGS is NOT applied. A sysroot that lives only in CFLAGS therefore leaves
+        ``clang -E`` unable to find system headers, and configure records the answer as
+        "no" instead of failing: gnulib reacts to a missing <signal.h> by replacing the
+        stdio write functions with a Windows-only implementation, and the link then dies
+        on undefined ``_rpl_puts``/``_rpl_fprintf``. Only ``/usr/bin/clang`` (the xcrun
+        shim) infers an SDK on its own, so this bites any toolchain addressed by its real
+        path, Apple's included. The flags repeat what CFLAGS already carries and are inert
+        on a full compile.
+        """
+        ret = [f"-D{d}" for d in self.defines]
+        ret += [
+            self.sysroot_flag, self.apple_isysroot_flag, self.apple_arch_flag,
+            self.apple_min_version_flag,
+        ]
+        return self._filter_list_empty_fields(ret)
+
+    @property
     def rcflags(self) -> list[str]:
         conf_flags = self._recipe.conf.tools.build.rcflags
         return self._filter_list_empty_fields(conf_flags)
@@ -411,7 +433,7 @@ class AutotoolsToolchain:
                         if getattr(_tc, env_var.lower()) is None:
                             env.define(env_var, ":")
 
-        env.append("CPPFLAGS", [f"-D{d}" for d in self.defines])
+        env.append("CPPFLAGS", self.cppflags)
         env.append("CXXFLAGS", self.cxxflags)
         env.append("CFLAGS", self.cflags)
         env.append("LDFLAGS", self.ldflags)

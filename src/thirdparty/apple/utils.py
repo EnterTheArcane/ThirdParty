@@ -1,5 +1,4 @@
 import os
-from io import StringIO
 from typing import Any, cast
 
 from thirdparty._internal.util.runners import check_output_runner
@@ -114,6 +113,11 @@ def xcodebuild_deployment_target_key(os_name: str) -> str | None:
     }.get(os_name) if os_name else None
 
 
+#: xcrun answers only depend on the installed Xcode/CLT, so cache them per process -
+#: a toolchain provider issues one call per tool it publishes on every graph walk.
+_XCRUN_CACHE: dict[str, str] = {}
+
+
 class XCRun:
     """
     XCRun is a wrapper for the Apple **xcrun** tool used to get information for building.
@@ -142,10 +146,17 @@ class XCRun:
         if self.sdk:
             command.extend(["-sdk", self.sdk])
         command.extend(args)
-        output = StringIO()
         cmd_str = cmd_args_to_string(command)
-        run(self._recipe, f"{cmd_str}", stdout=output, quiet=True)
-        return output.getvalue().strip()
+        cached = _XCRUN_CACHE.get(cmd_str)
+        if cached is None:
+            # Deliberately not routed through run(): xcrun queries the build machine's
+            # Xcode installation and needs no recipe environment. run() resolves
+            # recipe.folders.generators, which is unset on dependency recipe objects
+            # (their package_info() runs outside a build context), and toolchain
+            # providers call XCRun from exactly there.
+            cached = check_output_runner(cmd_str).strip()
+            _XCRUN_CACHE[cmd_str] = cached
+        return cached
 
     def find(self, tool: str) -> str:
         """find SDK tools (e.g. clang, ar, ranlib, lipo, codesign, etc.)"""

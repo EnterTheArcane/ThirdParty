@@ -3,6 +3,7 @@ import os
 import textwrap
 from typing import Any, cast
 
+from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty._internal.util.files import save
 from thirdparty.apple.utils import is_apple_os, apple_min_version_flag, resolve_apple_flags, apple_extra_flags
 from thirdparty.build.cross_building import cross_building, can_run
@@ -381,10 +382,19 @@ class MesonToolchain:
         _min_flag, arch_flag, isysroot_flag = (resolve_apple_flags(self._recipe, is_cross_building=bool(self.cross_build)))
         self.apple_arch_flag = arch_flag.split() if arch_flag else []
         self.apple_isysroot_flag = isysroot_flag.split() if isysroot_flag else []
+        if not self.apple_isysroot_flag:
+            # Native build: resolve_apple_flags() emits no -isysroot because Apple's own clang
+            # defaults to the active SDK. A recipe-provided clang (the llvm package) has no such
+            # default and fails to link with "ld: library 'System' not found", so take the sysroot
+            # from the toolchain contract. Mirrors AutotoolsToolchain and the CMake apple block.
+            _tc = find_toolchain(self._recipe)
+            if _tc is not None and _tc.apple_sysroot:
+                self.apple_isysroot_flag = ["-isysroot", _tc.apple_sysroot]
         self.apple_min_version_flag = [apple_min_version_flag(self._recipe)]
-        # Objective C/C++ ones
-        self.objc = compilers_by_conf.get("objc", "clang")
-        self.objcpp = compilers_by_conf.get("objcpp", "clang++")
+        # Objective C/C++ ones. Fall back to the C/C++ compilers already resolved from the
+        # contract rather than a bare "clang" off PATH, which need not be the same toolchain.
+        self.objc = compilers_by_conf.get("objc") or self.c or "clang"
+        self.objcpp = compilers_by_conf.get("objcpp") or self.cpp or "clang++"
         enable_arc = self._recipe.conf.tools.apple.enable_arc
         fobj_arc = ""
         if enable_arc:

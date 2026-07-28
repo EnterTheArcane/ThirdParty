@@ -4,6 +4,8 @@ import textwrap
 from pathlib import Path
 from typing import Any, cast
 
+from thirdparty._internal.model.toolchain import find_toolchain
+from thirdparty.apple.utils import apple_min_version_flag, is_apple_os, resolve_apple_flags
 from thirdparty.build.cross_building import cross_building
 from thirdparty.build.flags import architecture_flag, architecture_link_flag, libcxx_flags, threads_flags
 from thirdparty.env.virtualbuildenv import VirtualBuildEnv
@@ -196,6 +198,27 @@ class PremakeToolchain:
         #: List of extra preprocessor definitions. Added to ``defines``.
         self.extra_defines = []
 
+    @property
+    def _apple_sdk_flags(self) -> list[str]:
+        """The Apple SDK selection, for CFLAGS/CXXFLAGS/LDFLAGS.
+
+        Premake emits no SDK selection of its own, so a recipe-provided clang (the llvm
+        package) resolves none of the platform headers and dies inside libc++ with "We
+        don't know how to get the definition of mbstate_t on your platform". Only Apple's
+        own driver infers a sysroot. The architecture is left alone - premake already
+        drives that through its own ``architecture``/``macho_to_amd64`` handling.
+        """
+        recipe = self._recipe
+        if not is_apple_os(recipe):
+            return []
+        _min_flag, _arch_flag, isysroot_flag = resolve_apple_flags(
+            recipe, is_cross_building=cross_building(recipe))
+        if not isysroot_flag:
+            _tc = find_toolchain(recipe)
+            if _tc is not None and _tc.apple_sysroot:
+                isysroot_flag = f"-isysroot {_tc.apple_sysroot}"
+        return (isysroot_flag or "").split() + apple_min_version_flag(recipe).split()
+
     def project(self, project_name: str) -> "_PremakeProject":
         """
         The returned object will also have the same properties as the workspace but will only affect
@@ -222,15 +245,25 @@ class PremakeToolchain:
             elif cppstd[0].isnumeric():
                 cppstd = f"c++{cppstd}"
 
+        # One VirtualBuildEnv for the whole method: each instance re-derives its environment
+        # from scratch, so a second one generated later would overwrite the script and drop
+        # everything set here.
+        build_env = VirtualBuildEnv(self._recipe)
+        env = build_env.environment()
         compilers_build_mapping = self._recipe.conf.tools.build.compiler_executables
         if compilers_build_mapping:
-            build_env = VirtualBuildEnv(self._recipe)
-            env = build_env.environment()
             if "c" in compilers_build_mapping:
                 env.define("CC", cast(str, compilers_build_mapping["c"]))
             if "cpp" in compilers_build_mapping:
                 env.define("CXX", cast(str, compilers_build_mapping["cpp"]))
-            build_env.generate()
+        # The SDK flags ride the environment rather than workspace ``buildoptions``: gmake2
+        # folds $(CFLAGS)/$(CXXFLAGS)/$(LDFLAGS) into every project's ALL_*FLAGS, whereas
+        # workspace-level options are dropped by projects that declare their own
+        # configurations (rive-runtime does).
+        apple_flags = self._apple_sdk_flags
+        if apple_flags:
+            for var in ("CFLAGS", "CXXFLAGS", "LDFLAGS"):
+                env.append(var, apple_flags)
 
         macho_to_amd64 = (self._recipe.settings.arch if cross_building(self._recipe) and self._recipe.settings.os == "Mac" else None)
 
@@ -249,7 +282,7 @@ class PremakeToolchain:
             indent_level=8, )
         save(
             cast(RecipeBase, self), os.path.join(self._recipe.folders.generators, self.filename), content, )
-        VirtualBuildEnv(self._recipe).generate()
+        build_env.generate()
 
     def _target_build_os(self):
         recipe_os = str(self._recipe.settings.os)

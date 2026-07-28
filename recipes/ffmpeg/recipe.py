@@ -542,6 +542,14 @@ class Recipe(RecipeBase[_Options]):
             args.append(f"--extra-cflags={" ".join(cflags)}")
         if tc.ldflags:
             args.append(f"--extra-ldflags={" ".join(tc.ldflags)}")
+        if is_apple_os(self) and not cross_building(self) and tc.apple_isysroot_flag:
+            # ffmpeg compiles and runs small helper tools with a separate "host" compiler, and
+            # probes it with bare flags - none of --extra-cflags reaches it. A recipe-provided
+            # clang has no default SDK, so that probe fails on <ctype.h> and configure reports
+            # the misleading "Host compiler lacks C11 support". Native build, so the target's
+            # sysroot is also the host's.
+            args.append(f"--host-cflags={tc.apple_isysroot_flag}")
+            args.append(f"--host-ldflags={tc.apple_isysroot_flag}")
         tc.configure_args.extend(args)
         tc.generate()
 

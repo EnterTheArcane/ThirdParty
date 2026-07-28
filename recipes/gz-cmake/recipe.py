@@ -33,6 +33,16 @@ class Recipe(RecipeBase):
             self, self.folders.source / "cmake" / "GzSetCompilerFlags.cmake",
             'set(MSVC_MINIMAL_FLAGS "/Gy /W2 /bigobj")',
             'set(MSVC_MINIMAL_FLAGS "/Gy /bigobj")', strict=False)
+        # GzCheckSSE's Apple branch only knows ppc/i386/x86_64 and hard-errors on anything
+        # else, so an arm64 CMAKE_OSX_ARCHITECTURES aborts configure. It is reached only via
+        # GzSetCompilerFlags' GCC_OR_CLANG guard, which tests CMAKE_CXX_COMPILER_ID STREQUAL
+        # "Clang" - AppleClang never enters it, so this surfaces on the llvm toolchain and in
+        # every gz consumer (sdformat, gz-math, gz-utils, ...). Record the architecture
+        # instead; the SSE probes below it already run only for i386/x86_64.
+        replace_in_file(
+            self, self.folders.source / "cmake" / "GzCheckSSE.cmake",
+            'message(FATAL_ERROR "Invalid OS X arch name: ${osx_arch}")',
+            'list(APPEND ARCH ${osx_arch})', strict=False)
 
     def generate(self):
         tc = CMakeToolchain(self)

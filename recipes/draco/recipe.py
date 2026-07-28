@@ -2,7 +2,7 @@ from typing import Literal
 
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeToolchain
-from thirdparty.files import apply_patches, copy, get, rm, rmdir
+from thirdparty.files import apply_patches, copy, get, replace_in_file, rm, rmdir
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -42,6 +42,16 @@ class Recipe(RecipeBase[_Options]):
             destination=self.folders.source,
             strip_root=True)
         apply_patches(self)
+
+        # draco wraps every executable's link deps in GNU --start-group/--end-group, which
+        # Apple's ld64 rejects ("ld: unknown options"). The guard matches any compiler id
+        # starting with "Clang", so AppleClang ("AppleClang") slips past it and only a
+        # non-Apple clang targeting macOS trips it.
+        replace_in_file(
+            self,
+            self.folders.source / "cmake" / "draco_targets.cmake",
+            'if(CMAKE_CXX_COMPILER_ID MATCHES "^Clang|^GNU")',
+            'if(CMAKE_CXX_COMPILER_ID MATCHES "^Clang|^GNU" AND NOT APPLE)')
 
     def generate(self):
         tc = CMakeToolchain(self)
