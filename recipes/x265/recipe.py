@@ -74,7 +74,7 @@ class Recipe(RecipeBase[_Options]):
         if is_msvc(self):
             tc.variables["STATIC_LINK_CRT"] = is_msvc_static_runtime(self)
             tc.cache_variables["CMAKE_POLICY_DEFAULT_CMP0091"] = "NEW"
-        if self.settings.compiler == "clang":
+        if self.settings.compiler in ("clang", "clang-cl"):
             # x265's md5.cpp uses the `register` keyword, which C++17 removed. clang makes that a
             # hard error; cl.exe only warns. Downgrade so the shared source compiles with both.
             tc.extra_cxxflags.append("-Wno-register")
@@ -113,7 +113,7 @@ class Recipe(RecipeBase[_Options]):
                 static_lib = "libx265.a"
             os.unlink(self.folders.package / "lib" / static_lib)
 
-        if is_msvc(self) or (self.settings.os == "Windows" and self.settings.compiler == "clang"):
+        if is_msvc(self):
             # clang-cl builds x265 through CMake too, producing x265-static.lib; consumers
             # (package_info libs=["x265"], ffmpeg's -lx265) expect x265.lib. Rename it as for cl.exe.
             name = "libx265.lib" if self.options.shared else "x265-static.lib"

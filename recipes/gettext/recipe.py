@@ -10,7 +10,7 @@ from thirdparty.env import VirtualBuildEnv, VirtualRunEnv, Environment
 from thirdparty.files import copy, get, rename, replace_in_file
 from thirdparty.autotools import Autotools, AutotoolsDeps, AutotoolsToolchain
 from thirdparty.scm import GnuFtp
-from thirdparty.microsoft import is_msvc, unix_path
+from thirdparty.microsoft import is_clang_cl, is_msvc, unix_path
 from thirdparty.scm import Version
 from thirdparty.shell import run
 
@@ -48,7 +48,7 @@ class Recipe(RecipeBase[_Options]):
         if self.settings_build.os == "Windows":
             self.win_bash = True
             self.requires_tool("msys2")
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             self.requires_tool("automake")
 
     def source(self):
@@ -85,7 +85,7 @@ class Recipe(RecipeBase[_Options]):
             # not guessed properly when cross-building
             tc.configure_args.append("gl_cv_func_access_slash_works=yes")
 
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             target = None
             if self.settings.arch == "X64":
                 target = "x86_64-w64-mingw32"
@@ -122,14 +122,14 @@ class Recipe(RecipeBase[_Options]):
                     ])
         tc.make_args += ["-C", "intl"]
         env = tc.environment()
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             def programs() -> tuple[str, str, str, str | None]:
                 rc = None
                 if self.settings.arch == "X64":
                     rc = "windres --target=pe-x86-64"
                 elif self.settings.arch == "x86":
                     rc = "windres --target=pe-i386"
-                if self._is_clang_cl:
+                if is_clang_cl(self):
                     return os.environ.get("CC", "clang-cl"), os.environ.get("AR", "llvm-lib"), os.environ.get("LD", "lld-link"), rc
                 return "cl -nologo", "lib", "link", rc
 
@@ -148,7 +148,7 @@ class Recipe(RecipeBase[_Options]):
                 env.define("WINDRES", rc)
         tc.generate(env)
 
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             # Custom AutotoolsDeps for cl like compilers
             # workaround for upstream issue 12784
             includedirs: list[str] = []
@@ -198,7 +198,7 @@ class Recipe(RecipeBase[_Options]):
             # references to libintl_tfind / libintl_glwthread_rwlock_* undefined, so every
             # consumer (glib's meson intl dep) fails to link. Fold those objects into the archive.
             # Affects cl.exe and clang-cl alike.
-            ar = "llvm-lib" if self._is_clang_cl else "lib"
+            ar = "llvm-lib" if is_clang_cl(self) else "lib"
             libs_dir = self.folders.build / "intl" / ".libs"
             gnu_objs = glob.glob(
                 str(self.folders.build / "intl" / "gnulib-lib" / "**" / "libgnu_la-*.obj"),
@@ -234,12 +234,6 @@ class Recipe(RecipeBase[_Options]):
         self.info.libs = ["gnuintl"]
         if is_apple_os(self):
             self.info.frameworks.append("CoreFoundation")
-
-    @property
-    def _is_clang_cl(self):
-        return self.settings.os == "Windows" \
-            and self.settings.compiler == "clang" \
-            and self.settings.compiler_runtime
 
     @property
     def _gettext_folder(self):

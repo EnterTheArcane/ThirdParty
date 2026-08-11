@@ -17,8 +17,9 @@ _DEFAULT_CPPSTD = {
     "gcc": "gnu17",
     "clang": "gnu17",
     "apple-clang": "gnu17",
-    # /std:c++14 is MSVC's default and there is no "gnu" notion for it.
+    # /std:c++14 is the MSVC front's default and there is no "gnu" notion for it.
     "msvc": "14",
+    "clang-cl": "14",
 }
 
 _SUPPORTED_CPPSTD = {
@@ -28,6 +29,7 @@ _SUPPORTED_CPPSTD = {
     # https://learn.microsoft.com/en-us/cpp/build/reference/std-specify-language-standard-version
     # c++23 is only reachable through /std:c++latest; there is no c++26 yet.
     "msvc": ["14", "17", "20", "23"],
+    "clang-cl": ["14", "17", "20", "23"],
 }
 
 

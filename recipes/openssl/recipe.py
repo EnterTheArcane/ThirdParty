@@ -247,16 +247,12 @@ class Recipe(RecipeBase[_Options]):
         self.info.runenv.define_path("OPENSSL_MODULES", openssl_modules_dir)
 
     @property
-    def _is_clang_cl(self) -> bool:
-        return self.settings.os == "Windows" and self.settings.compiler == "clang" and self.settings.compiler_runtime # type: ignore
-
-    @property
     def _is_mingw(self):
         return self.settings.os == "Windows" and self.settings.compiler == "gcc"
 
     @property
     def _use_nmake(self):
-        return self._is_clang_cl or is_msvc(self)
+        return is_msvc(self)
 
     @property
     def _target(self):

@@ -6,7 +6,7 @@ from thirdparty.apple import fix_apple_shared_install_name
 from thirdparty.env import VirtualBuildEnv
 from thirdparty.files import copy, get, mkdir, rm, rmdir
 from thirdparty.autotools import Autotools, AutotoolsToolchain
-from thirdparty.microsoft import is_msvc, is_msvc_static_runtime, msvc_runtime_flag, unix_path
+from thirdparty.microsoft import is_clang_cl, is_cl_exe, is_msvc, is_msvc_static_runtime, msvc_runtime_flag, unix_path
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -81,12 +81,12 @@ class Recipe(RecipeBase[_Options]):
                 tc.extra_defines.append("USE_DEBUG_RTL")
 
             architecture_flag = ""
-            if is_msvc(self):
+            if is_cl_exe(self):
                 if self.settings.arch == "X64":
                     architecture_flag = "-m64"
                 elif self.settings.arch == "ARM":
                     architecture_flag = "-marm64"
-            elif self.settings.compiler == "clang":
+            elif is_clang_cl(self):
                 # -clang-cl selects the compiler; the arch flag is still needed so msvcc.sh
                 # picks ml64/armasm64 for the .asm files (default is the 32-bit ml, absent here).
                 architecture_flag = "-clang-cl"

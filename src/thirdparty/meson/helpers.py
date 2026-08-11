@@ -2,6 +2,7 @@ import os
 from pathlib import Path
 from typing import Any, cast
 
+from thirdparty._internal.model.settings import MSVC_COMPILERS
 from thirdparty.build.flags import cppstd_msvc_flag, disable_flag, gnu_cppstd_flag
 from thirdparty.recipe import RecipeBase
 
@@ -71,7 +72,7 @@ def to_cppstd_flag(recipe: RecipeBase, compiler: str | None, cppstd: str | None)
         return None
     if disable_flag(recipe, "cppstd"):
         return None
-    if compiler == "msvc":
+    if compiler in MSVC_COMPILERS:
         # Meson's logic with 'vc++X' vs 'c++X' is possibly a little outdated.
         # Presumably the intent is 'vc++X' is permissive and 'c++X' is not,
         # but '/permissive-' is the default since 16.8.

@@ -1,11 +1,12 @@
 from thirdparty._internal.model.recipe import RecipeBase
+from thirdparty._internal.model.settings import MSVC_COMPILERS
 from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty.errors import RecipeException
 
 
-# The msvc package pins the toolset (VS 2022 / v143) and the clang package pins ClangCL,
-# so the fallback toolset is a constant rather than something mapped from a compiler
-# version setting.
+# The msvc package pins the toolset (VS 2022 / v143) and the clang-cl package pins
+# ClangCL, so the fallback toolset is a constant rather than something mapped from a
+# compiler version setting.
 VS_PLATFORM_TOOLSET = "v143"
 
 
@@ -38,22 +39,55 @@ def msvc_runtime_flag(recipe: RecipeBase) -> str:
 
 def is_msvc(recipe: RecipeBase, build_context: bool = False) -> bool:
     """
-    Validates if the current compiler is ``msvc``.
+    Validates if the current compiler is MSVC-*like*, i.e. ``cl.exe`` or ``clang-cl``.
+
+    This mirrors CMake's ``MSVC`` variable. clang-cl targets the MSVC ABI, accepts cl.exe's
+    flag syntax and links against the MSVC CRT, so everything that branches on "this is an
+    MSVC-style build" - ``lib``-prefixed/``.lib`` outputs, ``/``-flags, ``-LIBPATH:`` link
+    lines, the Windows CRT shims - applies to both. Where the two genuinely differ, use
+    :func:`is_cl_exe` or :func:`is_clang_cl`.
 
     :param recipe: ``< RecipeBase object >`` The current recipe object. Always use ``self``.
     :param build_context: If True, will use the settings from the build context, not host ones
-    :return: ``bool`` True, if the host compiler is ``msvc``, otherwise, False.
+    :return: ``bool`` True, if the compiler is cl.exe or clang-cl, otherwise, False.
     """
-    if not build_context:
-        settings = recipe.settings
-    else:
-        settings = recipe.settings_build
+    settings = recipe.settings_build if build_context else recipe.settings
+    return settings.compiler in MSVC_COMPILERS
+
+
+def is_cl_exe(recipe: RecipeBase, build_context: bool = False) -> bool:
+    """
+    Validates if the current compiler is Microsoft's ``cl.exe`` specifically.
+
+    Only for the cases clang-cl does not share: cl.exe-only flags, ``CC=cl`` style build
+    variables, and link.exe-only behaviour. Prefer :func:`is_msvc` otherwise.
+
+    :param recipe: ``< RecipeBase object >`` The current recipe object. Always use ``self``.
+    :param build_context: If True, will use the settings from the build context, not host ones
+    :return: ``bool`` True, if the compiler is ``msvc``, otherwise, False.
+    """
+    settings = recipe.settings_build if build_context else recipe.settings
     return settings.compiler == "msvc"
+
+
+def is_clang_cl(recipe: RecipeBase, build_context: bool = False) -> bool:
+    """
+    Validates if the current compiler is ``clang-cl``, clang's MSVC-compatible front.
+
+    Only for the cases cl.exe does not share: the LLVM binutils (``llvm-lib``/``lld-link``)
+    and clang diagnostics. Prefer :func:`is_msvc` otherwise.
+
+    :param recipe: ``< RecipeBase object >`` The current recipe object. Always use ``self``.
+    :param build_context: If True, will use the settings from the build context, not host ones
+    :return: ``bool`` True, if the compiler is ``clang-cl``, otherwise, False.
+    """
+    settings = recipe.settings_build if build_context else recipe.settings
+    return settings.compiler == "clang-cl"
 
 
 def is_msvc_static_runtime(recipe: RecipeBase) -> bool:
     """
-    Validates when building with Visual Studio or msvc and MT on runtime.
+    Validates when building with an MSVC-like compiler and MT on runtime.
 
     :param recipe: ``< RecipeBase object >`` The current recipe object. Always use ``self``.
     :return: ``bool`` True, if ``msvc + runtime MT``. Otherwise, False.
@@ -78,5 +112,5 @@ def msvs_toolset(recipe: RecipeBase) -> str | None:
     compiler = settings.compiler
     if compiler == "msvc":
         return settings.compiler_toolset or VS_PLATFORM_TOOLSET
-    if compiler == "clang":
+    if compiler == "clang-cl":
         return "ClangCL"

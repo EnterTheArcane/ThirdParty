@@ -16,7 +16,7 @@ from thirdparty.files import (
 )
 from thirdparty.autotools import Autotools, AutotoolsDeps, AutotoolsToolchain
 from thirdparty.pkgconfig import PkgConfigDeps
-from thirdparty.microsoft import is_msvc, unix_path
+from thirdparty.microsoft import is_clang_cl, is_cl_exe, is_msvc, unix_path
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -488,7 +488,7 @@ class Recipe(RecipeBase[_Options]):
             # unlike other tools that use the PKG_CONFIG environment variable
             # if we are aware the user has requested a specific pkg-config, we pass it to the configure script
             args.append(f"--pkg-config={unix_path(self, pkg_config)}")
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             # clang-cl is an MSVC-ABI, cl.exe-flag-compatible compiler (uses /Fo, links via the
             # MSVC CRT), so ffmpeg must treat it with the msvc toolchain conventions; --cc above
             # still points it at clang-cl. Without this ffmpeg drives it as GNU clang and its
@@ -498,7 +498,7 @@ class Recipe(RecipeBase[_Options]):
             # (e.g. ff_h264_cabac_tables); the MSVC linker rejects those in a large-address-aware
             # image (LNK2017 / LNK1165), so link the programs into the low 2 GB.
             args.append("--extra-ldexeflags=-LARGEADDRESSAWARE:NO")
-        if is_msvc(self):
+        if is_cl_exe(self):
             # ffmpeg uses C11 <stdatomic.h>; cl.exe gates it behind this flag (VS 2022 17.5+) --
             # otherwise vcruntime_c11_stdatomic.h errors "C atomic support is not enabled".
             # clang-cl supports C11 atomics unconditionally, so this is cl.exe-only.
@@ -513,7 +513,7 @@ class Recipe(RecipeBase[_Options]):
             # cl produces ARM64 helpers that cannot run on the x64 build host ("Exec format
             # error"). Point --host-cc at a wrapper that builds helper tools with the x64 host cl
             # (sibling of the arm64 cross cl) and x64 import libraries, yielding runnable helpers.
-            if is_msvc(self) and cc:
+            if is_cl_exe(self) and cc:
                 args.append(f"--host-cc={unix_path(self, self._write_host_cc_wrapper())}")
             if self.settings.os in ("Linux", "FreeBSD"):
                 # A cross linker does not follow an imported shared library's runpath to resolve
@@ -550,7 +550,7 @@ class Recipe(RecipeBase[_Options]):
         tc.configure_args.extend(args)
         tc.generate()
 
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             # Custom AutotoolsDeps for cl like compilers (clang-cl included, since it also runs
             # under --toolchain=msvc and links cl-style with -LIBPATH:). Without this ffmpeg's
             # dependency link probes can't find the .lib search paths (e.g. "libmp3lame not found").
@@ -882,10 +882,6 @@ class Recipe(RecipeBase[_Options]):
         }
 
     @property
-    def _is_clang_cl(self):
-        return self.settings.os == "Windows" and self.settings.compiler == "clang"
-
-    @property
     def _target_arch(self):
         # Taken from acceptable values https://github.com/FFmpeg/FFmpeg/blob/0684e58886881a998f1a7b510d73600ff1df2b90/configure#L5010
         if self.settings.arch == "ARM":
@@ -941,9 +937,11 @@ class Recipe(RecipeBase[_Options]):
     def _default_compilers(self) -> dict[str, str]:
         if self.settings.compiler == "gcc":
             return {"cc": "gcc", "cxx": "g++"}
+        elif is_clang_cl(self):
+            return {"cc": "clang-cl", "cxx": "clang-cl"}
         elif self.settings.compiler in ["clang", "apple-clang"]:
             return {"cc": "clang", "cxx": "clang++"}
-        elif is_msvc(self):
+        elif is_cl_exe(self):
             return {"cc": "cl.exe", "cxx": "cl.exe"}
         return {}
 

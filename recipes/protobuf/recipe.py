@@ -81,8 +81,7 @@ class Recipe(RecipeBase[_Options]):
         tc.cache_variables["protobuf_BUILD_LIBPROTOC"] = True
         tc.cache_variables["protobuf_BUILD_LIBUPB"] = True
         tc.cache_variables["protobuf_DISABLE_RTTI"] = not self.options.with_rtti
-        if (is_msvc(self) or (self.settings.os == "Windows" and self.settings.compiler == "clang")) \
-                and self.settings.compiler_runtime:
+        if is_msvc(self) and self.settings.compiler_runtime:
             # protobuf's CMake otherwise defaults protobuf_MSVC_STATIC_RUNTIME ON (/MT) for
             # clang-cl too, while abseil follows the toolchain's dynamic CRT (/MD) -> lld-link
             # RuntimeLibrary mismatch. is_msvc_static_runtime() is False for clang-cl (dynamic),

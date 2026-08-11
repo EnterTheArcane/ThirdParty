@@ -101,19 +101,14 @@ class Recipe(RecipeBase[_Options]):
         self.info.set_property("pkg_config_name", "libpng")
         self.info.set_property("pkg_config_aliases", [f"libpng{major_min_version}"])
 
-        prefix = "lib" if (is_msvc(self) or self._is_clang_cl) else ""
+        prefix = "lib" if is_msvc(self) else ""
         suffix = major_min_version if self.settings.os == "Windows" else ""
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             suffix += "_static" if not self.options.shared else ""
         suffix += "d" if self.settings.os == "Windows" and self.settings.build_type == "Debug" else ""
         self.info.libs = [f"{prefix}png{suffix}"]
         if self.settings.os in ["Linux", "Android", "FreeBSD", "SunOS", "AIX"]:
             self.info.system_libs.append("m")
-
-    @property
-    def _is_clang_cl(self):
-        return self.settings.os == "Windows" and self.settings.compiler == "clang" and \
-            self.settings.compiler_runtime
 
     @property
     def _has_neon_support(self):

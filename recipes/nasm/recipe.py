@@ -9,7 +9,7 @@ from thirdparty.env import VirtualBuildEnv
 from thirdparty.files import apply_patches, chdir, copy, get, replace_in_file, rmdir
 from thirdparty.autotools import Autotools, AutotoolsToolchain
 from thirdparty.nmake import NMakeToolchain
-from thirdparty.microsoft import is_msvc
+from thirdparty.microsoft import is_cl_exe
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 from thirdparty.shell import run
@@ -31,7 +31,7 @@ class Recipe(RecipeBase):
     def requirements(self):
         if self.settings.os == "Windows":
             self.requires_tool("strawberryperl")
-            if not is_msvc(self):
+            if not is_cl_exe(self):
                 self.win_bash = True
                 self.requires_tool("msys2")
 
@@ -58,7 +58,7 @@ class Recipe(RecipeBase):
 
     def generate(self):
         VirtualBuildEnv(self).generate()
-        if is_msvc(self):
+        if is_cl_exe(self):
             NMakeToolchain(self).generate()
         else:
             tc = AutotoolsToolchain(self)
@@ -81,7 +81,7 @@ class Recipe(RecipeBase):
 
     def build(self):
         apply_patches(self)
-        if is_msvc(self):
+        if is_cl_exe(self):
             with chdir(self, self.folders.source):
                 # msvc.mak hardcodes /W2 in BUILD_CFLAGS, conflicting with the quiet -w -> D9025.
                 replace_in_file(
@@ -106,7 +106,7 @@ class Recipe(RecipeBase):
 
     def package(self):
         copy(self, pattern="LICENSE", dst=self.folders.package / "licenses", src=self.folders.source)
-        if is_msvc(self):
+        if is_cl_exe(self):
             copy(self, pattern="*.exe", src=self.folders.source, dst=self.folders.package / "bin", keep_path=False)
             with chdir(self, self.folders.package / "bin"):
                 shutil.copy2("nasm.exe", "nasmw.exe")
@@ -132,12 +132,12 @@ class Recipe(RecipeBase):
 
     @property
     def _nasm(self):
-        suffix = "w.exe" if is_msvc(self) else ""
+        suffix = "w.exe" if is_cl_exe(self) else ""
         return self.folders.package / "bin" / f"nasm{suffix}"
 
     @property
     def _ndisasm(self):
-        suffix = "w.exe" if is_msvc(self) else ""
+        suffix = "w.exe" if is_cl_exe(self) else ""
         return self.folders.package / "bin" / f"ndisasm{suffix}"
 
     def _chmod_plus_x(self, filename: Path):

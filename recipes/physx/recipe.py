@@ -4,7 +4,7 @@ from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.build import cross_building
 from thirdparty.cmake import CMakeToolchain, CMake
 from thirdparty.files import apply_patches, load, save, get, copy, replace_in_file
-from thirdparty.microsoft import msvc_runtime_flag, is_msvc
+from thirdparty.microsoft import msvc_runtime_flag, is_clang_cl, is_msvc
 from thirdparty.scm import GithubRepository, Version
 
 
@@ -52,7 +52,7 @@ class Recipe(RecipeBase[_Options]):
             # nvcc on Windows doesn't accept clang-cl as its host compiler, and driving it with
             # the packaged cl.exe still trips nvcc's host-OS detection in this hermetic setup.
             # GPU physx on Windows needs the msvc toolchain; fall back to CPU-only under clang.
-            if self.settings.os == "Windows" and self.settings.compiler == "clang":
+            if is_clang_cl(self):
                 self.options.gpu = False
 
     def requirements(self):
@@ -88,7 +88,7 @@ class Recipe(RecipeBase[_Options]):
 
         apply_patches(self)
 
-        if self.settings.os == "Windows" and self.settings.compiler == "clang":
+        if is_clang_cl(self):
             # clang-cl reports MSVC-only flags (/MP, /d2Zi+) as unused and its /W4 warnings
             # differ from cl.exe's; /WX would make all of those fatal. Drop warnings-as-errors
             # for the clang build.

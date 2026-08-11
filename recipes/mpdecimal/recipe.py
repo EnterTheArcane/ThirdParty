@@ -8,7 +8,7 @@ from thirdparty.env import VirtualBuildEnv, VirtualRunEnv
 from thirdparty.files import get, chdir, copy, apply_patches, mkdir, rename, replace_in_file
 from thirdparty.autotools import AutotoolsToolchain, Autotools
 from thirdparty.nmake import NMakeDeps, NMakeToolchain
-from thirdparty.microsoft import is_msvc
+from thirdparty.microsoft import is_clang_cl, is_cl_exe
 from thirdparty.shell import run
 from thirdparty.scm import Version, WebReleaseIndex
 
@@ -34,7 +34,7 @@ class Recipe(RecipeBase[_Options]):
             self.settings.compiler_cxx_standard = None
 
     def requirements(self):
-        if not is_msvc(self) and self.settings_build.os == "Windows":
+        if not is_cl_exe(self) and self.settings_build.os == "Windows":
             self.win_bash = True
             self.requires_tool("msys2")
 
@@ -47,7 +47,7 @@ class Recipe(RecipeBase[_Options]):
             strip_root=True)
 
     def generate(self):
-        if is_msvc(self):
+        if is_cl_exe(self):
             deps = NMakeDeps(self)
             deps.generate()
 
@@ -73,7 +73,7 @@ class Recipe(RecipeBase[_Options]):
 
     def build(self):
         apply_patches(self)
-        if self._is_clang_cl:
+        if is_clang_cl(self):
             # mpdecimal.c's public helpers are defined inline but declared extern in the public
             # header, so consumers (CPython's _decimal) expect out-of-line definitions in the
             # library. clang emits none for them: the ALWAYS_INLINE ones expand to __forceinline
@@ -104,19 +104,19 @@ class Recipe(RecipeBase[_Options]):
                     f"{_ret_type}\n{_func}(")
         # After patching, the per-library Makefile.vc WARN hardcodes /W4; drop it (the patch
         # rewrites this line, so it must run here rather than in source()) so the quiet -w wins.
-        if is_msvc(self):
+        if is_cl_exe(self):
             for _sub in ("libmpdec", "libmpdec++"):
                 replace_in_file(
                     self, self.folders.source / _sub / "Makefile.vc",
                     "WARN = /W4 /wd4200", "WARN = /wd4200", strict=False)
-        if is_msvc(self):
+        if is_cl_exe(self):
             self._build_msvc()
         else:
             source_dir = self.folders.source
             build_dir = self.folders.build
             autotools = Autotools(self)
             autotools.configure()
-            if self._is_clang_cl:
+            if is_clang_cl(self):
                 self._fix_static_obj_output(build_dir)
             # self.output.info(load(self, pathlib.Path("libmpdec", "Makefile")))
             libmpdec, libmpdecpp = self._target_names
@@ -131,7 +131,7 @@ class Recipe(RecipeBase[_Options]):
     def package(self):
         pkg_dir = self.folders.package
         copy(self, "LICENSE.txt", src=self.folders.source, dst=pkg_dir / "licenses")
-        if is_msvc(self):
+        if is_cl_exe(self):
             source_dir = self.folders.source
             distfolder = self._dist_folder
             # mpdecimal ships pre-configured MSVC headers named mpdecimal{32,64}vc.h (vc is a
@@ -174,7 +174,7 @@ class Recipe(RecipeBase[_Options]):
 
     def package_info(self):
         lib_pre_suf = ("", "")
-        if is_msvc(self):
+        if is_cl_exe(self):
             if self.options.shared:
                 lib_pre_suf = ("lib", f"-{self.version}.dll")
             else:
@@ -184,7 +184,7 @@ class Recipe(RecipeBase[_Options]):
                 lib_pre_suf = ("", ".dll")
 
         self.info.components["libmpdecimal"].libs = ["{}mpdec{}".format(*lib_pre_suf)]
-        if self.options.shared and is_msvc(self):
+        if self.options.shared and is_cl_exe(self):
             self.info.components["libmpdecimal"].defines = ["MPDECIMAL_DLL"]
 
         if self.settings.os in ["Linux", "FreeBSD"]:
@@ -245,10 +245,6 @@ class Recipe(RecipeBase[_Options]):
             else:
                 copy(self, f"libmpdec++-{self.version}.lib", libmpdecpp_folder, dist_folder)
             copy(self, "decimal.hh", libmpdecpp_folder, dist_folder)
-
-    @property
-    def _is_clang_cl(self):
-        return self.settings.os == "Windows" and self.settings.compiler == "clang"
 
     def _fix_static_obj_output(self, base_dir):
         # The static-lib rules compile with `-c foo.c` and no -o, relying on the GNU cc default

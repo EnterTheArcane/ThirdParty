@@ -1,7 +1,7 @@
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
 from thirdparty.files import copy, get, rmdir, replace_in_file
-from thirdparty.microsoft import is_msvc
+from thirdparty.microsoft import is_clang_cl, is_msvc
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -32,7 +32,7 @@ class Recipe(RecipeBase[_Options]):
             destination=self.folders.source,
             strip_root=True)
 
-        if self.settings.compiler == "clang":
+        if is_clang_cl(self):
             # clang-cl reports CMAKE_CXX_COMPILER_ID=Clang but CMake sets MSVC=TRUE, so openjph's
             # per-file SIMD flag blocks take the `if (MSVC)` path (/arch:AVX*), which leaves the
             # SSE4.1/SSSE3 sources with no target feature -- and clang (unlike cl.exe) refuses to

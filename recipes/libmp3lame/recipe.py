@@ -7,7 +7,7 @@ from thirdparty.env import VirtualBuildEnv
 from thirdparty.files import apply_patches, chdir, copy, get, rename, replace_in_file, rm, rmdir
 from thirdparty.autotools import Autotools, AutotoolsToolchain
 from thirdparty.nmake import NMakeToolchain
-from thirdparty.microsoft import is_msvc
+from thirdparty.microsoft import is_clang_cl, is_msvc
 from thirdparty.shell import run
 from thirdparty.scm import SourceForgeProject, Version
 
@@ -31,7 +31,7 @@ class Recipe(RecipeBase[_Options]):
         self.settings.compiler_libcxx = None
 
     def requirements(self):
-        if not is_msvc(self) and not self._is_clang_cl:
+        if not is_msvc(self):
             self.requires_tool("gnu-config")
             # LAME 4.0's configure script requires pkg-config even when the
             # optional frontend is disabled.
@@ -50,7 +50,7 @@ class Recipe(RecipeBase[_Options]):
         apply_patches(self)
 
     def generate(self):
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             NMakeToolchain(self).generate()
         else:
             VirtualBuildEnv(self).generate()
@@ -62,14 +62,14 @@ class Recipe(RecipeBase[_Options]):
             tc.generate()
 
     def build(self):
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             self._build_vs()
         else:
             self._build_autotools()
 
     def package(self):
         copy(self, pattern="LICENSE", src=self.folders.source, dst=self.folders.package / "licenses")
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             copy(self, pattern="*.h", src=self.folders.source / "include", dst=self.folders.package / "include" / "lame")
             name = "libmp3lame.lib" if self.options.shared else "libmp3lame-static.lib"
             copy(self, name, src=self.folders.source / "output", dst=self.folders.package / "lib")
@@ -90,10 +90,6 @@ class Recipe(RecipeBase[_Options]):
         if self.settings.os in ["Linux", "FreeBSD"]:
             self.info.system_libs = ["m"]
 
-    @property
-    def _is_clang_cl(self):
-        return str(self.settings.compiler) in ["clang"] and str(self.settings.os) in ["Windows"]
-
     def _build_vs(self):
         with chdir(self, self.folders.source):
             shutil.copy2("configMS.h", "config.h")
@@ -108,7 +104,7 @@ class Recipe(RecipeBase[_Options]):
             replace_in_file(self, "Makefile.MSVC", "lib: $(ASM_OBJ) libA libB", "lib: $(ASM_OBJ) libA", strict=False)
             replace_in_file(self, "Makefile.MSVC", "$(ASM_OBJ) $(LIB_OBJ) $(HIP_OBJ)", "$(ASM_OBJ) $(LIB_OBJ)", strict=False)
             command = "nmake -f Makefile.MSVC comp=msvc"
-            if self._is_clang_cl:
+            if is_clang_cl(self):
                 compilers_from_conf = self.conf.tools.build.compiler_executables
                 buildenv_vars = VirtualBuildEnv(self).vars()
                 cl = compilers_from_conf.get("c", buildenv_vars.get("CC", "clang-cl"))

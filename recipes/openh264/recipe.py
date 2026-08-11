@@ -59,7 +59,7 @@ class Recipe(RecipeBase[_Options]):
 
         rmdir(self, self.folders.package / "lib" / "pkgconfig")
 
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             rm(self, "*.pdb", self.folders.package / "bin")
         fix_apple_shared_install_name(self)
 
@@ -78,7 +78,3 @@ class Recipe(RecipeBase[_Options]):
                     # >>> referenced by welsEncoderExt.cpp
                     self.info.system_libs.append("c++abi")
                 self.info.system_libs.append(libcxx)
-
-    @property
-    def _is_clang_cl(self):
-        return self.settings.os == "Windows" and self.settings.compiler == "clang"

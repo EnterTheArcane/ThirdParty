@@ -9,7 +9,7 @@ from thirdparty.errors import RecipeException
 from thirdparty.files import apply_patches, copy, get, rename, replace_in_file, rmdir
 from thirdparty.autotools import Autotools, AutotoolsToolchain
 from thirdparty.scm import GnuFtp
-from thirdparty.microsoft import is_msvc, unix_path
+from thirdparty.microsoft import is_clang_cl, is_msvc, unix_path
 from thirdparty.scm import Version
 
 
@@ -67,7 +67,7 @@ class Recipe(RecipeBase[_Options]):
                 # libltdl DLL with -shared, which lld-link can't turn into a valid DLL
                 # (subsystem/entry). libtool the tool doesn't need libltdl.dll, so build it
                 # static-only for clang; the msvc path still gets the shared lib.
-                "--disable-shared" if self._is_clang_cl else "--enable-shared",
+                "--disable-shared" if is_clang_cl(self) else "--enable-shared",
                 "--enable-static",
                 "--enable-ltdl-install",
             ])
@@ -84,7 +84,7 @@ class Recipe(RecipeBase[_Options]):
         # See: https://savannah.gnu.org/patch/?9313#comment1
         # In the future this could be removed if a new version fixes this
         # upstream
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             env.define("F77", "no")
             env.define("FC", "no")
         tc.generate(env)
@@ -172,10 +172,6 @@ class Recipe(RecipeBase[_Options]):
         self.info.buildenv.append_path("AUTOMAKE_RECIPE_INCLUDES", libtool_aclocal_dir)
         self.info.runenv.append_path("ACLOCAL_PATH", libtool_aclocal_dir)
         self.info.runenv.append_path("AUTOMAKE_RECIPE_INCLUDES", libtool_aclocal_dir)
-
-    @property
-    def _is_clang_cl(self):
-        return self.settings.os == "Windows" and self.settings.compiler == "clang"
 
     @property
     def _datarootdir(self):

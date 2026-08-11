@@ -9,7 +9,7 @@ from thirdparty.env import VirtualBuildEnv, VirtualRunEnv
 from thirdparty.files import apply_patches, chdir, collect_libs, copy, get, replace_in_file, rmdir
 from thirdparty.autotools import Autotools, AutotoolsDeps, AutotoolsToolchain
 from thirdparty.nmake import NMakeDeps, NMakeToolchain
-from thirdparty.microsoft import is_msvc, is_msvc_static_runtime, msvc_runtime_flag
+from thirdparty.microsoft import is_cl_exe, is_msvc_static_runtime, msvc_runtime_flag
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 from thirdparty.shell import run
@@ -38,7 +38,7 @@ class Recipe(RecipeBase[_Options]):
 
     def requirements(self):
         self.requires("zlib")
-        if self.settings.os == "Windows" and not is_msvc(self):
+        if self.settings.os == "Windows" and not is_cl_exe(self):
             self.win_bash = True
             self.requires_tool("msys2")
         if is_apple_os(self):
@@ -46,7 +46,7 @@ class Recipe(RecipeBase[_Options]):
         # Cross-compiling tcl with the MSVC makefile requires a native tclsh to run
         # during the build (rules.vc: "You must explicitly set TCLSH_NATIVE"). Build a
         # build-machine copy of tcl and pass its tclsh as TCLSH_NATIVE (see _build_nmake).
-        if cross_building(self) and is_msvc(self):
+        if cross_building(self) and is_cl_exe(self):
             self.requires_tool(self.name)
 
     def source(self):
@@ -94,7 +94,7 @@ class Recipe(RecipeBase[_Options]):
             strict=False)
 
     def generate(self):
-        if is_msvc(self):
+        if is_cl_exe(self):
             tc = NMakeToolchain(self)
             tc.generate()
 
@@ -138,7 +138,7 @@ class Recipe(RecipeBase[_Options]):
 
     def build(self):
         self._patch_sources()
-        if is_msvc(self):
+        if is_cl_exe(self):
             self._build_nmake(["release"])
         else:
             autotools = Autotools(self)
@@ -150,7 +150,7 @@ class Recipe(RecipeBase[_Options]):
 
     def package(self):
         copy(self, "license.terms", src=self.folders.source, dst=self.folders.package / "licenses")
-        if is_msvc(self):
+        if is_cl_exe(self):
             self._build_nmake(["install-binaries", "install-libraries"])
         else:
             autotools = Autotools(self)
@@ -177,7 +177,7 @@ class Recipe(RecipeBase[_Options]):
         replace_in_file(self, tclConfigShPath, "\nTCL_BUILD_", "\n#TCL_BUILD_")
         replace_in_file(self, tclConfigShPath, "\nTCL_SRC_DIR", "\n#TCL_SRC_DIR")
         ## Replace references to package folder by TCL_ROOT env var supposed to be defined by VirtualRunEnv
-        if is_msvc(self):
+        if is_cl_exe(self):
             replace_in_file(self, tclConfigShPath, os.fspath(self.folders.package), "${TCL_ROOT}")
         else:
             replace_in_file(self, tclConfigShPath, "TCL_PREFIX='/'", "TCL_PREFIX='${TCL_ROOT}'")

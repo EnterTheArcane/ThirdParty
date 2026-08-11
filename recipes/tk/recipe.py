@@ -11,7 +11,7 @@ from thirdparty.errors import RecipeException
 from thirdparty.files import apply_patches, chdir, copy, get, replace_in_file, rmdir
 from thirdparty.autotools import Autotools, AutotoolsDeps, AutotoolsToolchain
 from thirdparty.nmake import NMakeDeps, NMakeToolchain
-from thirdparty.microsoft import is_msvc, unix_path
+from thirdparty.microsoft import is_cl_exe, unix_path
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 from thirdparty.shell import run
@@ -48,7 +48,7 @@ class Recipe(RecipeBase[_Options]):
             self.requires("libxrender")
             self.requires("libxau")
             self.requires("libxdmcp")
-        if not is_msvc(self):
+        if not is_cl_exe(self):
             if self.settings.os == "Windows":
                 # The non-msvc path runs tk's ./configure shell script (msvc uses makefile.vc via
                 # nmake); without win_bash it is handed to cmd.exe ("not recognized as a command").
@@ -57,7 +57,7 @@ class Recipe(RecipeBase[_Options]):
         # Cross-compiling tk with makefile.vc requires a native tclsh to run during the
         # build (rules.vc: "You must explicitly set TCLSH_NATIVE"). Pull in a build-machine
         # copy of tcl and pass its tclsh as TCLSH_NATIVE (see _build_nmake).
-        if cross_building(self) and is_msvc(self):
+        if cross_building(self) and is_cl_exe(self):
             self.requires_tool("tcl")
 
     def source(self):
@@ -74,7 +74,7 @@ class Recipe(RecipeBase[_Options]):
         replace_in_file(self, self.folders.source / "win" / "rules.vc", "= -W3", "=", strict=False)
         replace_in_file(self, self.folders.source / "win" / "rules.vc", "= -W4", "=", strict=False)
 
-        if not is_msvc(self):
+        if not is_cl_exe(self):
             # Tk 9.0.4's win/Makefile.in ships INSTALL_ROOT empty, unlike tcl's which sets it
             # to $(DESTDIR). With it empty the DESTDIR that autotools.install() passes is
             # ignored and `make install` writes to the real filesystem root (//lib, //share
@@ -91,7 +91,7 @@ class Recipe(RecipeBase[_Options]):
     def generate(self):
         VirtualBuildEnv(self).generate()
 
-        if is_msvc(self):
+        if is_cl_exe(self):
             NMakeToolchain(self).generate()
             NMakeDeps(self).generate()
         else:
@@ -147,7 +147,7 @@ class Recipe(RecipeBase[_Options]):
                 deps.generate()
 
     def build(self):
-        if is_msvc(self):
+        if is_cl_exe(self):
             self._build_nmake()
         else:
             autotools = Autotools(self)
@@ -184,7 +184,7 @@ class Recipe(RecipeBase[_Options]):
             src=self.folders.source,
             dst=self.folders.package / "licenses",
         )
-        if is_msvc(self):
+        if is_cl_exe(self):
             self._build_nmake("install")
         else:
             with chdir(self, self.folders.build):
@@ -225,7 +225,7 @@ class Recipe(RecipeBase[_Options]):
         tk_minor = tk_version.minor
         assert tk_major is not None and tk_minor is not None
         if tk_major >= 9:
-            if is_msvc(self):
+            if is_cl_exe(self):
                 static_runtime = (
                     "dynamic" not in str(self.settings.compiler_runtime)
                     and "MD" not in str(self.settings.compiler_runtime))
@@ -249,7 +249,7 @@ class Recipe(RecipeBase[_Options]):
                 ]
         else:
             lib_infix = f"{tk_major}.{tk_minor}"
-            if is_msvc(self):
+            if is_cl_exe(self):
                 lib_infix = f"{tk_major}{tk_minor}"
                 tk_suffix = "t{}{}{}".format(
                     "" if self.options.shared else "s",

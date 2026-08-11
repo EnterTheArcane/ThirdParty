@@ -4,7 +4,7 @@ from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.apple import is_apple_os
 from thirdparty.cmake import CMake, CMakeToolchain, CMakeDeps
 from thirdparty.errors import RecipeInvalidConfiguration
-from thirdparty.microsoft import is_msvc
+from thirdparty.microsoft import is_clang_cl, is_msvc
 from thirdparty.files import get, copy, rmdir, replace_in_file
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
@@ -78,7 +78,7 @@ class Recipe(RecipeBase[_Options]):
             sha256="9616cbdbbfcb1420b3261cd280a047d74ab0a249825e577b0e2dd310e22f6b83",
             destination=self.folders.source,
             strip_root=True)
-        if self.settings.compiler == "clang":
+        if is_clang_cl(self):
             # onnxruntime.rc's VERSIONINFO uses the octal escapes \251 (©) and \256 (®); clang's
             # llvm-rc rejects them as "Non-ASCII 8-bit codepoint ... in a non-Unicode string"
             # (cl.exe's rc.exe accepts them via its codepage). ASCII-ize for clang; cl.exe keeps ©/®.
@@ -179,7 +179,7 @@ class Recipe(RecipeBase[_Options]):
             tc.extra_cxxflags.append("/wd4996")
         else:
             tc.extra_cxxflags.append("-Wno-deprecated-declarations")
-        if self.settings.os == "Windows" and self.settings.compiler == "clang":
+        if is_clang_cl(self):
             # spin_pause.cc compiles the WAITPKG intrinsic _tpause under `#if defined(_WIN32)`,
             # which clang-cl satisfies -- but clang refuses the intrinsic without the target
             # feature (cl.exe implies it). Enable it; the call itself stays guarded at runtime by

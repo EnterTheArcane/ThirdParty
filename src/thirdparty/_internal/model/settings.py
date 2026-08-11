@@ -9,6 +9,12 @@ from thirdparty.errors import RecipeException
 _ARCH_VALUES = ("ARM", "X64")
 _REQUIRED_FIELDS = ("arch", "build_type", "os")
 
+# The ``compiler`` values that present the MSVC front end: Microsoft's cl.exe and clang's
+# MSVC-compatible driver. Both take cl.exe's flag syntax, target the MSVC ABI and link the
+# MSVC CRT, so recipes branch on the pair (see ``thirdparty.microsoft.is_msvc``) far more
+# often than on either alone.
+MSVC_COMPILERS = ("msvc", "clang-cl")
+
 
 @dataclass
 class Settings:

@@ -8,7 +8,7 @@ from thirdparty.env import Environment, VirtualBuildEnv
 from thirdparty.files import copy, get, replace_in_file
 from thirdparty.autotools import Autotools, AutotoolsToolchain
 from thirdparty.pkgconfig import PkgConfigDeps
-from thirdparty.microsoft import is_msvc, unix_path
+from thirdparty.microsoft import is_clang_cl, is_cl_exe, is_msvc, unix_path
 from thirdparty.scm import GnuFtp, Version
 
 
@@ -47,7 +47,7 @@ class Recipe(RecipeBase[_Options]):
     def requirements(self):
         if self.options.with_pcre2:
             self.requires("pcre2")
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             # clang-cl targets the MSVC ABI and, like cl.exe, lacks getopt/dirent; both need
             # the Windows shims.
             self.requires("getopt-for-visual-studio")
@@ -133,7 +133,7 @@ class Recipe(RecipeBase[_Options]):
             # Windows st_mode will ever produce, so is_a_file()'s switch stays correct.
             for flags in (tc.extra_cflags, tc.extra_cxxflags):
                 flags += ["-Dmode_t=int", "-DS_IFBLK=0"]
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             # The MSVC-style triplet tells configure this is a Windows/MSVC-ABI target (not
             # native/mingw); clang-cl needs it just as cl.exe does. getopt comes from the
             # getopt-for-visual-studio shim, so assert it is available.
@@ -145,7 +145,7 @@ class Recipe(RecipeBase[_Options]):
             if self.options.with_extended_colors:
                 tc.extra_cflags.append(" ".join(f"-I{dir}" for dir in self.dependencies["naive-tsearch"].info.includedirs))
                 tc.extra_ldflags.append(" ".join(f"-l{lib}" for lib in self.dependencies["naive-tsearch"].info.libs))
-        if is_msvc(self):
+        if is_cl_exe(self):
             # cl.exe-specific compiler invocation. clang-cl gets CC/CPP and its compile flags
             # (including C++ exceptions) from the AutotoolsToolchain contract instead.
             # The env vars below are used by ./configure, but not during make
@@ -156,7 +156,7 @@ class Recipe(RecipeBase[_Options]):
             tc.extra_cflags.append("-FS")
             tc.extra_cxxflags.append("-FS")
             tc.extra_cxxflags.append("-EHsc")
-        if self._is_clang_cl:
+        if is_clang_cl(self):
             # ncurses is legacy K&R-era C that relies on implicit int / implicit function
             # declarations / int<->pointer conversions. cl.exe tolerates these (as warnings
             # that -w hides), but modern clang promotes them to hard errors. Downgrade them so
@@ -183,7 +183,7 @@ class Recipe(RecipeBase[_Options]):
         tc.configure_args.remove("--includedir=${prefix}/include")
         tc.generate()
 
-        if is_msvc(self):
+        if is_cl_exe(self):
             env = Environment()
             env.define("CC", "cl -nologo -FS")
             env.define("CXX", "cl -nologo -FS")
@@ -195,7 +195,7 @@ class Recipe(RecipeBase[_Options]):
             env.define("STRIP", ":")
             env.vars(self).save_script("buildenv_msvc")
 
-        if self._is_clang_cl:
+        if is_clang_cl(self):
             # On the MSVC-ABI target ncurses archives static libs through a generated
             # mk_static_lib.sh wrapper that runs "$AR -out:<lib> <objs>" (lib.exe syntax). The
             # toolchain's default AR is the GNU-style llvm-ar, which rejects -out:; point it at
@@ -207,7 +207,7 @@ class Recipe(RecipeBase[_Options]):
             env.define("RANLIB", ":")
             env.vars(self).save_script("buildenv_clang_cl")
 
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             # Custom AutotoolsDeps for cl like compilers (clang-cl included)
             # workaround for upstream issue 12784: configure doesn't propagate dependency
             # include flags for cl-style compilers, so the header-only shims (getopt/dirent/
@@ -243,7 +243,7 @@ class Recipe(RecipeBase[_Options]):
                                for p in self.dependencies["naive-tsearch"].info.aggregated_components().includedirs]
             env.append("CPPFLAGS", search_shim + [f"-I{unix_path(self, p)}" for p in includedirs] + [f"-D{d}" for d in defines])
             lib_inputs = [lib if lib.endswith(".lib") else f"{lib}.lib" for lib in libs]
-            if is_msvc(self):
+            if is_cl_exe(self):
                 # cl.exe/link.exe read _LINK_ for extra link inputs; clang-cl/lld-link do not.
                 env.append("_LINK_", lib_inputs)
                 env.append("LDFLAGS", [f"-L{unix_path(self, p)}" for p in libdirs] + linkflags)
@@ -319,7 +319,7 @@ class Recipe(RecipeBase[_Options]):
             if libcxx:
                 self.info.components["libcurses++"].system_libs.append(libcxx)
 
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             self.info.components["libcurses"].requires += [
                 "getopt-for-visual-studio::getopt-for-visual-studio",
                 "dirent::dirent",
@@ -348,10 +348,6 @@ class Recipe(RecipeBase[_Options]):
     @property
     def _is_mingw(self):
         return self.settings.os == "Windows" and self.settings.compiler == "gcc"
-
-    @property
-    def _is_clang_cl(self):
-        return self.settings.os == "Windows" and self.settings.compiler == "clang"
 
     @property
     def _suffix(self):

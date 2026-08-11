@@ -1,6 +1,7 @@
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeToolchain
 from thirdparty.files import apply_patches, copy, get
+from thirdparty.microsoft import is_clang_cl
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -43,7 +44,7 @@ class Recipe(RecipeBase[_Options]):
         tc.variables["BASISU_ZSTD"] = True
         tc.variables["BASISU_EXAMPLES"] = False
         tc.variables["BASISU_OPENCL"] = False
-        if self.options.with_sse and self.settings.os == "Windows" and self.settings.compiler == "clang":
+        if self.options.with_sse and is_clang_cl(self):
             # basis_universal's CMakeLists treats clang-cl as MSVC and skips the -msse4.1 it
             # adds for other compilers; clang still needs the target feature for the intrinsics.
             tc.extra_cflags.append("-msse4.1")

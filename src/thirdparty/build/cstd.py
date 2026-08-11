@@ -15,8 +15,9 @@ _DEFAULT_CSTD = {
     "gcc": "gnu17",
     "clang": "gnu17",
     "apple-clang": "gnu17",
-    # MSVC has no documented default cstd; /std: is simply not passed unless asked for.
+    # The MSVC front has no documented default cstd; /std: is not passed unless asked for.
     "msvc": None,
+    "clang-cl": None,
 }
 
 _SUPPORTED_CSTD = {
@@ -24,6 +25,7 @@ _SUPPORTED_CSTD = {
     "clang": _GNU_CSTD,
     "apple-clang": _GNU_CSTD,
     "msvc": ["11", "17"],
+    "clang-cl": ["11", "17"],
 }
 
 

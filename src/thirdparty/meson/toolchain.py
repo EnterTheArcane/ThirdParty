@@ -11,6 +11,7 @@ from thirdparty.build.flags import (
     architecture_link_flag, libcxx_flags, architecture_flag, threads_flags, )
 from thirdparty.env import VirtualBuildEnv
 from thirdparty.errors import RecipeException
+from thirdparty._internal.model.settings import MSVC_COMPILERS
 from thirdparty.meson.helpers import get_apple_subsystem, to_cppstd_flag, to_cstd_flag, to_meson_machine, to_meson_value
 from thirdparty.microsoft import msvc_runtime_flag
 from thirdparty.recipe import RecipeBase
@@ -172,7 +173,7 @@ class MesonToolchain:
         self.c_std = to_cstd_flag(self._recipe, cstd)
         #: VS runtime library to use. Defined by ``msvc_runtime_flag()`` by default.
         self.b_vscrt = None
-        if compiler in ("msvc", "clang"):
+        if compiler in MSVC_COMPILERS:
             vscrt = msvc_runtime_flag(self._recipe)
             if vscrt:
                 self.b_vscrt = str(vscrt).lower()

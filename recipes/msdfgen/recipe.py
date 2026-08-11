@@ -3,7 +3,7 @@ import os
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
 from thirdparty.files import apply_patches, copy, get, rm, rmdir
-from thirdparty.microsoft import is_msvc, is_msvc_static_runtime
+from thirdparty.microsoft import is_clang_cl, is_msvc, is_msvc_static_runtime
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -40,7 +40,7 @@ class Recipe(RecipeBase[_Options]):
             strip_root=True)
         apply_patches(self)
 
-        if self.settings.compiler == "clang":
+        if is_clang_cl(self):
             # msdfgen.rc and the resource.h it includes are UTF-16: clang-cl's -E preprocessing
             # (step 1 of CMake's cmake_llvm_rc) rejects the UTF-16 BOM, and llvm-rc then rejects
             # the non-ASCII author name in the non-Unicode VERSIONINFO strings. Re-encode both to

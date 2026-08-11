@@ -1,5 +1,6 @@
 from typing import Any
 
+from thirdparty._internal.model.settings import MSVC_COMPILERS
 from thirdparty._internal.model.toolchain import find_toolchain
 from thirdparty.errors import RecipeException
 from thirdparty.recipe import RecipeBase
@@ -36,11 +37,10 @@ def architecture_flag(recipe: RecipeBase) -> str:
     if the_os == "Android":
         return ""
 
+    if compiler == "clang-cl":
+        # The cl-style driver takes its target from the toolchain, not from -m flags.
+        return ""
     if compiler == "clang" and the_os == "Windows":
-        comp_exes = recipe.conf.tools.build.compiler_executables
-        clangcl = "clang-cl" in str(comp_exes.get("c") or comp_exes.get("cpp", ""))
-        if clangcl:
-            return ""  # Do not add arch flags for clang-cl, can happen in cross-build runtime=None
         # LLVM/Clang and VS/Clang must define runtime. msys2 clang won't
         runtime = settings.compiler_runtime  # runtime is Windows only
         if runtime is not None:
@@ -159,10 +159,7 @@ def build_type_flags(recipe: RecipeBase) -> list[str]:
     if not compiler or not build_type:
         return []
 
-    comp_exes = recipe.conf.tools.build.compiler_executables
-    clangcl = "clang-cl" in str(comp_exes.get("c") or comp_exes.get("cpp", ""))
-
-    if compiler == "msvc" or clangcl:
+    if compiler in MSVC_COMPILERS:
         # https://github.com/Kitware/CMake/blob/d7af8a34b67026feaee558433db3a835d6007e06/
         # Modules/Platform/Windows-MSVC.cmake
         # FIXME: This condition seems legacy, as no more "clang" exists in Recipe toolsets
@@ -212,16 +209,15 @@ def threads_flags(recipe: RecipeBase) -> list[str]:
 
 
 def llvm_clang_front(recipe: RecipeBase) -> str | None:
-    # Only Windows clang with MSVC backend (LLVM/Clang, not MSYS2 clang)
-    if (recipe.settings.os != "Windows" or recipe.settings.compiler != "clang" or not recipe.settings.compiler_runtime):
-        return
-    tc = find_toolchain(recipe)
-    if tc is not None and tc.front_kind in ("clang-cl", "clang"):
-        return tc.front_kind
-    compilers = recipe.conf.tools.build.compiler_executables
-    if "clang-cl" in str(compilers.get("c", "")) or "clang-cl" in str(compilers.get("cpp", "")):
-        return "clang-cl"  # The MSVC-compatible front
-    return "clang"  # The GNU-compatible front
+    """Which front an LLVM/Clang toolchain presents for a Windows target.
+
+    ``"clang-cl"`` for the MSVC-compatible driver, ``"clang"`` for the GNU-compatible one
+    (which still links the MSVC CRT there), None for any other target or compiler.
+    """
+    settings = recipe.settings
+    if settings.os != "Windows":
+        return None
+    return settings.compiler if settings.compiler in ("clang", "clang-cl") else None
 
 
 def lto_flags(recipe: RecipeBase) -> list[str]:
@@ -283,17 +279,14 @@ def cppstd_flag(recipe: RecipeBase) -> str:
     if disable_flag(recipe, "cppstd"):
         return ""
 
-    if compiler == "msvc":
+    if compiler in MSVC_COMPILERS:
         flag = cppstd_msvc_flag(str(cppstd))
         return f"/std:{flag}" if flag else ""
 
     if compiler not in _GNU_COMPILERS:
         return ""
 
-    flag = f"-std={gnu_cppstd_flag(str(cppstd))}"
-    if llvm_clang_front(recipe) == "clang-cl":
-        flag = flag.replace("=", ":")
-    return flag
+    return f"-std={gnu_cppstd_flag(str(cppstd))}"
 
 
 def cppstd_msvc_flag(cppstd: str) -> str | None:
@@ -333,7 +326,7 @@ def cstd_flag(recipe: RecipeBase) -> str:
     if disable_flag(recipe, "cstd"):
         return ""
 
-    if compiler == "msvc":
+    if compiler in MSVC_COMPILERS:
         flag = cstd_msvc_flag(str(cstd))
         return f"/std:{flag}" if flag else ""
 

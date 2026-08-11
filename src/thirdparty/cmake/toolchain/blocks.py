@@ -18,6 +18,7 @@ from thirdparty.build.flags import architecture_flag, architecture_link_flag, li
 from thirdparty.cmake.toolchain import RECIPE_TOOLCHAIN_FILENAME
 from thirdparty.cmake.utils import is_multi_configuration
 from thirdparty.errors import RecipeException
+from thirdparty._internal.model.settings import MSVC_COMPILERS
 from thirdparty.microsoft.visual import VS_PLATFORM_TOOLSET, msvc_platform_from_arch
 
 from typing import Any, cast
@@ -109,16 +110,16 @@ class VSRuntimeBlock(Block):
         if build_type is None:  # pyright: ignore[reportUnnecessaryComparison] -- defensive: build_type declared str but may be unset at runtime
             return None
 
-        if compiler == "msvc" or compiler == "clang":
+        if compiler in MSVC_COMPILERS:
             runtime_type = settings.compiler_runtime_type
             rt = "MultiThreadedDebug" if runtime_type == "Debug" else "MultiThreaded"
             if runtime != "static":
                 rt += "DLL"
             config_dict[build_type] = rt
 
-            # If clang is being used the CMake check of compiler will try to create a simple
+            # If clang-cl is being used the CMake check of compiler will try to create a simple
             # test application, and will fail because the Debug runtime is not there
-            if compiler == "clang":
+            if compiler == "clang-cl":
                 if config_dict.get("Debug") is None:
                     clang_rt = "MultiThreadedDebug" + ("DLL" if runtime != "static" else "")
                     config_dict["Debug"] = clang_rt
@@ -1064,11 +1065,11 @@ class ToolchainProviderBlock(Block):
 
         include_dirs = [str(d).replace("\\", "/") for d in tc.msvc_include_dirs]
         lib_dirs = [str(d).replace("\\", "/") for d in tc.msvc_lib_dirs]
-        if settings.os == "Windows" and settings.compiler == "clang" and not include_dirs:
+        if settings.os == "Windows" and tc.family == "clang" and not include_dirs:
             raise RecipeException(
-                "Building for Windows with the clang toolchain needs the packaged MSVC "
-                "CRT/STL and Windows SDK dirs, but the toolchain contract has none "
-                "(clang recipe requirements missing msvc/windows-sdk?)")
+                f"Building for Windows with the {settings.compiler} toolchain needs the packaged "
+                "MSVC CRT/STL and Windows SDK dirs, but the toolchain contract has none "
+                f"({settings.compiler} recipe requirements missing msvc/windows-sdk?)")
         # On a Windows build machine cl.exe/clang-cl and link.exe/lld-link read the CRT+SDK
         # dirs from INCLUDE/LIB (the msvc + windows-sdk buildenv). The explicit /imsvc +
         # /libpath: flags are needed only when cross-compiling from a non-Windows host,
@@ -1182,13 +1183,13 @@ class GenericSystemBlock(Block):
         compiler = settings.compiler
         if compiler == "msvc":
             toolset = settings.compiler_toolset or VS_PLATFORM_TOOLSET
-        elif compiler == "clang":
+        elif compiler == "clang-cl":
             if generator and "Visual" in generator:
                 if any(f"Visual Studio {v}" in generator for v in ("16", "17", "18")):
                     toolset = "ClangCL"
                 else:
                     raise RecipeException(
-                        "CMakeToolchain with compiler=clang and a CMake "
+                        "CMakeToolchain with compiler=clang-cl and a CMake "
                         "'Visual Studio' generator requires VS16, VS17 or VS18")
         toolset_arch = recipe.conf.tools.cmake.toolchain.toolset_arch
         if toolset_arch is not None:
@@ -1208,7 +1209,7 @@ class GenericSystemBlock(Block):
         compiler = settings.compiler
         arch = settings.arch
 
-        if compiler in ("msvc", "clang") and generator and "Visual" in generator:
+        if compiler in MSVC_COMPILERS and generator and "Visual" in generator:
             return msvc_platform_from_arch(arch)
         return None
 

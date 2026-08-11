@@ -162,6 +162,23 @@ class SelectToolchainTests(unittest.TestCase):
         self.assertEqual(settings.compiler_libcxx, "c++_static")
         self.assertEqual(settings.os_api_level, "24")
 
+    def test_clang_cl_is_opt_in_from_real_recipes(self):
+        # The front end is a toolchain choice, not a consequence of the target: clang stays
+        # the default everywhere, and its MSVC-compatible front is asked for by name.
+        self.assertEqual(select_toolchain(BuildProfile(target_os="Windows"), REAL_RECIPES), "clang")
+        settings = resolve_settings(BuildProfile(target_os="Windows", compiler="clang-cl"), REAL_RECIPES)
+        self.assertEqual(settings.compiler, "clang-cl")
+        self.assertEqual(settings.compiler_recipe, "clang-cl")
+        self.assertEqual(settings.compiler_runtime, "dynamic")
+
+    def test_both_clang_fronts_build_every_llvm_target(self):
+        # Neither front is tied to a target - cross builds may use either.
+        for compiler in ("clang", "clang-cl"):
+            for target_os in ("Windows", "Linux", "Mac"):
+                profile = BuildProfile(target_os=target_os, compiler=compiler)
+                self.assertEqual(select_toolchain(profile, REAL_RECIPES), compiler)
+                self.assertEqual(resolve_settings(profile, REAL_RECIPES).compiler, compiler)
+
 
 class InjectionTests(unittest.TestCase):
     def test_provider_injected_as_host_require(self):
@@ -172,13 +189,13 @@ class InjectionTests(unittest.TestCase):
 
     def test_toolchain_layer_recipes_are_skipped(self):
         profile = BuildProfile(target_os="Windows")
-        layer = toolchain_layer(REAL_RECIPES, "clang", profile)
-        self.assertIn("clang", layer)
+        layer = toolchain_layer(REAL_RECIPES, "clang-cl", profile)
+        self.assertIn("clang-cl", layer)
         self.assertIn("llvm", layer)
         self.assertIn("msvc", layer)
         self.assertIn("windows-sdk", layer)
         for name in ("llvm", "msvc", "windows-sdk"):
-            recipe = _make_recipe(name=name, settings=_settings(os="Windows", compiler_recipe="clang"))
+            recipe = _make_recipe(name=name, settings=_settings(os="Windows", compiler_recipe="clang-cl"))
             _inject_toolchain_requires(recipe)
             self.assertEqual(recipe._requires, [], name)
 
@@ -272,8 +289,8 @@ class LTOFlagsTests(unittest.TestCase):
 
     def test_off_outside_linux(self):
         tc = ToolchainInfo(family="clang", front_kind="clang")
-        settings = _settings(os="Windows", compiler="clang", compiler_recipe="clang")
-        recipe = _consumer_with_provider("clang", tc, settings=settings)
+        settings = _settings(os="Windows", compiler="clang-cl", compiler_recipe="clang-cl")
+        recipe = _consumer_with_provider("clang-cl", tc, settings=settings)
         self.assertEqual(lto_flags(recipe), [])
 
 
@@ -292,8 +309,8 @@ class CMakeBlockTests(unittest.TestCase):
 
     def test_toolchain_provider_block_renders_contract(self):
         tc = self._windows_clang_contract()
-        settings = _settings(os="Windows", compiler="clang", compiler_recipe="clang")
-        recipe = _consumer_with_provider("clang", tc, settings=settings)
+        settings = _settings(os="Windows", compiler="clang-cl", compiler_recipe="clang-cl")
+        recipe = _consumer_with_provider("clang-cl", tc, settings=settings)
         content = self._render(ToolchainProviderBlock, recipe)
         assert content is not None
         self.assertIn('set(CMAKE_LINKER "C:/llvm/bin/lld-link.exe")', content)
@@ -306,9 +323,9 @@ class CMakeBlockTests(unittest.TestCase):
 
     def test_toolchain_provider_block_emits_msvc_dirs_when_cross_from_posix(self):
         tc = self._windows_clang_contract()
-        settings = _settings(os="Windows", compiler="clang", compiler_recipe="clang")
+        settings = _settings(os="Windows", compiler="clang-cl", compiler_recipe="clang-cl")
         recipe = _consumer_with_provider(
-            "clang", tc, settings=settings, settings_build=_settings(os="Linux"))
+            "clang-cl", tc, settings=settings, settings_build=_settings(os="Linux"))
         content = self._render(ToolchainProviderBlock, recipe)
         assert content is not None
         self.assertIn("/imsvcC:/msvc/include", content)
@@ -323,8 +340,8 @@ class CMakeBlockTests(unittest.TestCase):
 
     def test_toolchain_provider_block_requires_msvc_dirs_for_windows_clang(self):
         tc = ToolchainInfo(family="clang", front_kind="clang-cl")
-        settings = _settings(os="Windows", compiler="clang", compiler_recipe="clang")
-        recipe = _consumer_with_provider("clang", tc, settings=settings)
+        settings = _settings(os="Windows", compiler="clang-cl", compiler_recipe="clang-cl")
+        recipe = _consumer_with_provider("clang-cl", tc, settings=settings)
         with self.assertRaisesRegex(RecipeException, "packaged MSVC"):
             ToolchainProviderBlock(recipe, toolchain=None, name="test").context()
 
@@ -342,9 +359,9 @@ class CMakeBlockTests(unittest.TestCase):
 class MsvsToolsetTests(unittest.TestCase):
     def test_contract_toolset_wins(self):
         tc = ToolchainInfo(family="clang", front_kind="clang-cl", msbuild_toolset="ClangCL")
-        settings = _settings(os="Windows", compiler="clang", compiler_recipe="clang",
+        settings = _settings(os="Windows", compiler="clang-cl", compiler_recipe="clang-cl",
                              compiler_runtime="dynamic")
-        recipe = _consumer_with_provider("clang", tc, settings=settings)
+        recipe = _consumer_with_provider("clang-cl", tc, settings=settings)
         self.assertEqual(msvs_toolset(recipe), "ClangCL")
 
     def test_fallback_without_contract(self):

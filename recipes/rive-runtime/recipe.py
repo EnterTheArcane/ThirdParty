@@ -94,7 +94,7 @@ class Recipe(RecipeBase):
         # (clang++ defaults to the MSVC ABI there). Besides using the requested compiler, the
         # clang/gcc toolsets emit GNU-style -I/-D flags, which sidesteps the Git-bash POSIX
         # path-conversion that mangles cl.exe's /I and /D flags when make runs recipes via sh.
-        if self.settings.compiler == "clang":
+        if self.settings.compiler in ("clang", "clang-cl"):
             premake.arguments["toolset"] = "clang"
         elif self.settings.os == "Windows":
             premake.arguments["toolset"] = "msc"
@@ -127,7 +127,7 @@ class Recipe(RecipeBase):
             # as a single short argument -- that the archiver reads with @. premake emits the
             # same GNU-ar LINKCMD for both toolsets, but llvm-ar (clang) wants -rcs over *.o
             # while lib.exe (msc) wants -out: over *.obj (premake's msc/gmake archive is broken).
-            if self.settings.compiler == "clang":
+            if self.settings.compiler in ("clang", "clang-cl"):
                 obj_glob, archiver = "*.o", '$(AR) -rcs "$@" @"$@.rsp"'
             else:
                 obj_glob, archiver = "*.obj", '$(AR) -out:"$@" @"$@.rsp"'

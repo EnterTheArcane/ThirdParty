@@ -15,7 +15,7 @@ from thirdparty.files import (
 )
 from thirdparty.autotools import Autotools, AutotoolsToolchain
 from thirdparty.scm import GnuFtp
-from thirdparty.microsoft import is_msvc, unix_path
+from thirdparty.microsoft import is_clang_cl, is_msvc, unix_path
 from thirdparty.scm import Version
 
 
@@ -69,7 +69,7 @@ class Recipe(RecipeBase[_Options]):
                         f"--build={build}",
                     ])
         env = tc.environment()
-        if is_msvc(self) or self._is_clang_cl:
+        if is_msvc(self):
             cc, lib, link = self._msvc_tools
             if cc.endswith("cl"):
                 cc = f"{cc} -nologo"
@@ -91,7 +91,7 @@ class Recipe(RecipeBase[_Options]):
         self._apply_resource_patch()
         autotools = Autotools(self)
         autotools.configure()
-        if self.settings.os == "Windows" and (self.settings.arch == "ARM" or self._is_clang_cl):
+        if self.settings.os == "Windows" and (self.settings.arch == "ARM" or is_clang_cl(self)):
             # ARM64: GNU windres cannot emit ARM64 COFF (its only PE targets are pe-x86-64 / pe-i386), so the resource object would be x64 and fail to link (LNK1112).
             # clang-cl: the windres-style rule drives llvm-windres, whose clang preprocessor doesn't read INCLUDE and so can't find the SDK's winver.h.
             # Either way drop the purely-cosmetic version resource from the link.
@@ -108,7 +108,7 @@ class Recipe(RecipeBase[_Options]):
         rm(self, "*.la", self.folders.package / "lib")
         rmdir(self, self.folders.package / "share")
         fix_apple_shared_install_name(self)
-        if (is_msvc(self) or self._is_clang_cl) and self.options.shared:
+        if is_msvc(self) and self.options.shared:
             for import_lib in ["iconv", "charset"]:
                 dst = self.folders.package / "lib" / f"{import_lib}.lib"
                 if os.path.isfile(dst):
@@ -123,18 +123,13 @@ class Recipe(RecipeBase[_Options]):
         self.info.libs = ["iconv", "charset"]
 
     @property
-    def _is_clang_cl(self):
-        return self.settings.compiler == "clang" and self.settings.os == "Windows" and \
-            self.settings.compiler_runtime
-
-    @property
     def _msvc_tools(self) -> tuple[str, str, str]:
         compilers = self.conf.tools.build.compiler_executables
         compiler = compilers.get("c") or compilers.get("cpp")
         # POSIX path: the compile wrapper runs in msys2 bash, which eats the backslashes of a
         # native Windows path (D:\...\clang-cl.exe -> D:...clang-cl.exe: command not found).
         cc = unix_path(self, os.fspath(compiler)) if compiler else "clang-cl"
-        return (cc, "llvm-lib", "lld-link") if self._is_clang_cl else ("cl", "lib", "link")
+        return (cc, "llvm-lib", "lld-link") if is_clang_cl(self) else ("cl", "lib", "link")
 
     def _apply_resource_patch(self):
         if self.settings.arch == "x86":

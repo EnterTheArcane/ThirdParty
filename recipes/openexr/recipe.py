@@ -3,6 +3,7 @@ import os
 from thirdparty import RecipeBase, RecipeOptions
 from thirdparty.cmake import CMake, CMakeDeps, CMakeToolchain
 from thirdparty.files import copy, get, rmdir, replace_in_file
+from thirdparty.microsoft import is_clang_cl
 from thirdparty.scm import Version
 from thirdparty.scm.github import GithubRepository
 
@@ -48,7 +49,7 @@ class Recipe(RecipeBase[_Options]):
         tc.variables["BUILD_TESTING"] = False
         tc.variables["BUILD_WEBSITE"] = False
         tc.variables["DOCS"] = False
-        if self.settings.compiler == "clang" and self.settings.os == "Windows":
+        if is_clang_cl(self):
             # internal_zip.c defines IMF_HAVE_SSE4_1 whenever _MSC_VER is set (which clang-cl is),
             # compiling the SSE4.1/SSSE3 `reconstruct` as the only x86 path -- so the x64 build
             # already assumes SSE4.1. cl.exe emits those intrinsics implicitly; clang needs the
