@@ -631,7 +631,7 @@ def _build_recipe(
                 recipe.conf.compose_conf(dep_conf)
 
     # Seed the generic compiler/sysroot conf from the toolchain contract so generators
-    # that only understand conf (meson/premake/nmake, cmake-presets) keep working.
+    # that only understand conf (meson/nmake, cmake-presets) keep working.
     _tc = _find_toolchain(recipe)
     if _tc is not None and not _tc.cmake_toolchain_file:
         if _tc.compilers:
