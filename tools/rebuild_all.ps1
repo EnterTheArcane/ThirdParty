@@ -27,7 +27,7 @@ $packages = @(
     "openssl",
 
     # --- strings / parsing / scripting ---
-    "abseil", "libexpat", "pcre2", "re2",
+    "libexpat", "pcre2",
     "lua", "luau",
     "rapidyaml", "yaml-cpp",
     "jansson", "sqlite",

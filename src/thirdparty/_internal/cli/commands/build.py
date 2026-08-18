@@ -48,7 +48,7 @@ def _wipe(path: str | Path) -> None:
 
 def setup_parser(p: argparse.ArgumentParser) -> None:
     p.add_argument(
-        "recipe", metavar="<recipe>", nargs="*", help="Recipe name(s) or glob pattern(s) to build (e.g. 'abseil' or '*'); omit to build all")
+        "recipe", metavar="<recipe>", nargs="*", help="Recipe name(s) or glob pattern(s) to build (e.g. 'zlib' or '*'); omit to build all")
     p.add_argument(
         "--build-type", default="Release", choices=["Debug", "Release", "RelWithDebInfo"], dest="build_type", metavar="<type>", )
     p.add_argument(

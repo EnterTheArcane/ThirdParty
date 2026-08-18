@@ -118,7 +118,7 @@ def process(filepath: Path) -> str:
 
 
 TARGETS = [
-    'assimp', 'autoconf', 'automake', 'clipper2', 'cpuinfo', 'dav1d',
+    'assimp', 'autoconf', 'automake', 'clipper2', 'dav1d',
     'glib', 'highway', 'icu', 'kuba-zip', 'libcurl', 'libde265',
     'libjpeg-turbo', 'libsamplerate', 'libtiff', 'libtool',
     'libvpx', 'x265', 'libxml2', 'openexr', 'openjpeg',
