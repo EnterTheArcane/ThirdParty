@@ -167,7 +167,7 @@ def port_data(
     all_versions: bool = False,
     dry_run: bool = False,
     overwrite: bool = False,
-) -> None:
+):
     # Locate recipe_data.yml
     recipe_dir = cci_root / "recipes" / name / "all"
     if not recipe_dir.is_dir():
@@ -205,7 +205,7 @@ def port_data(
     print(f"[port_data] Wrote {out_path}")
 
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Convert recipe_data.yml to ThirdParty data.yml format."
     )

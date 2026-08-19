@@ -22,7 +22,7 @@ DEFAULT_ROOTS = (ROOT / "src", ROOT / "recipes")
 class _BlankLineAfterDeclTransformer(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (PositionProvider,)
 
-    def __init__(self, fix: bool) -> None:
+    def __init__(self, fix: bool):
         self.fix = fix
         # Each entry: (line_no, kind, name, blank_count)
         self.findings: list[tuple[int, str, str, int]] = []

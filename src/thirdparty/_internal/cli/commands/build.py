@@ -35,7 +35,7 @@ from thirdparty.env.environment import generate_aggregated_env
 from thirdparty.errors import RecipeException
 
 
-def _wipe(path: str | Path) -> None:
+def _wipe(path: str | Path):
     """Remove a directory tree, clearing read-only attributes (e.g. Subversion `.svn` or
     msys2 source files on Windows) that make a plain ``shutil.rmtree`` fail.  ``rmdir``
     installs an onerror handler that chmods + retries; this swallows any final failure so
@@ -46,7 +46,7 @@ def _wipe(path: str | Path) -> None:
         pass
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     p.add_argument(
         "recipe", metavar="<recipe>", nargs="*", help="Recipe name(s) or glob pattern(s) to build (e.g. 'zlib' or '*'); omit to build all")
     p.add_argument(
@@ -88,7 +88,7 @@ def setup_parser(p: argparse.ArgumentParser) -> None:
 
 
 @command
-def build(args: argparse.Namespace) -> None:
+def build(args: argparse.Namespace):
     """Build a recipe (and its dependencies) from source."""
     patterns: list[str] = args.recipe or ["*"]
     build_type: str = args.build_type
@@ -229,7 +229,7 @@ def _build_dep_graph(
     if _recipe_cache is None:
         _recipe_cache = {}
 
-    def _add_dep(dep_name: str, is_build: bool, direct: bool = True) -> None:
+    def _add_dep(dep_name: str, is_build: bool, direct: bool = True):
         # Host deps inherit the parent's target; requires_tool (build context) reset to the
         # build machine.  Effective target fully determines the dep's settings + output folder.
         dep_profile = profile.build_machine() if is_build else profile
@@ -409,7 +409,7 @@ def _build_ordered(
     generate_only: bool,
     fail_fast: bool = False,
     exact_set: set[str] | None = None,
-    verbose: bool = False, ) -> None:
+    verbose: bool = False, ):
     rgraph = _Graph.build(recipes_root, names, profile, jobs=jobs, transitive=True)
     order = rgraph.topo_order()
 
@@ -457,7 +457,7 @@ def _build_ordered(
     skipped: list[tuple[str, str | None]] = []
     unavailable: dict[str, str] = {}
 
-    def _skip(name: str, reason: str | None = None, *, blocks_dependants: bool = False) -> None:
+    def _skip(name: str, reason: str | None = None, *, blocks_dependants: bool = False):
         skipped.append((name, reason))
         if blocks_dependants:
             unavailable[name] = reason or "skipped"

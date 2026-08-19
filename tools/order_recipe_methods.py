@@ -50,7 +50,7 @@ def _is_recipe_base(value: cst.BaseExpression) -> bool:
 
 
 class _ReorderMethods(cst.CSTTransformer):
-    def __init__(self) -> None:
+    def __init__(self):
         self.changed = False
 
     def leave_ClassDef(

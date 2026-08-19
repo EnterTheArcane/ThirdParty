@@ -289,7 +289,7 @@ def migrate_recipe(path: Path, *, dry_run: bool = False) -> bool:
     return True
 
 
-def main() -> None:
+def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("recipes", nargs="*", help="Recipe names to migrate; defaults to all")
     parser.add_argument("--dry-run", action="store_true")

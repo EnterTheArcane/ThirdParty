@@ -91,10 +91,10 @@ def build_deterministic_tar(
     return buf.getvalue()
 
 
-def _add_tree(tar: tarfile.TarFile, root: Path) -> None:
+def _add_tree(tar: tarfile.TarFile, root: Path):
     """Recursively add *root*'s contents to *tar* in sorted, symlink-preserving order."""
 
-    def recurse(directory: str, rel: str) -> None:
+    def recurse(directory: str, rel: str):
         for name in sorted(os.listdir(directory)):
             full = os.path.join(directory, name)
             arcname = f"{rel}/{name}" if rel else name

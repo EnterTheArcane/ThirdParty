@@ -145,7 +145,7 @@ class GithubRepository:
     fallback, including when an authenticated token is rate-limited.
     """
 
-    def __init__(self, recipe: RecipeBase, slug: str) -> None:
+    def __init__(self, recipe: RecipeBase, slug: str):
         self._recipe = recipe
         self._slug = slug
         self._token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN") or None

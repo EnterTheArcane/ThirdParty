@@ -99,7 +99,7 @@ _REMOVE_METHODS: frozenset[str] = frozenset({
 class _ConanTransformer(cst.CSTTransformer):
     """One-pass CST rewriter for conan-center-index → ThirdParty recipes."""
 
-    def __init__(self, version: str, url: str, sha256: str) -> None:
+    def __init__(self, version: str, url: str, sha256: str):
         super().__init__()
         self._version = version
         self._url = url
@@ -388,7 +388,7 @@ def _get_source_info(recipe_data: dict, version: str) -> tuple[str, str]:
     return str(url), str(sha256)
 
 
-def _copy_patches(recipe_data: dict, version: str, cci_dir: Path, out_dir: Path) -> None:
+def _copy_patches(recipe_data: dict, version: str, cci_dir: Path, out_dir: Path):
     entries = (recipe_data.get("patches") or {}).get(str(version)) or []
     if not entries:
         return
@@ -409,7 +409,7 @@ def _copy_patches(recipe_data: dict, version: str, cci_dir: Path, out_dir: Path)
 
 _SKIP_NAMES = {"recipe.py", "test_package", "patches", "__pycache__"}
 
-def _copy_data_files(cci_dir: Path, out_dir: Path) -> None:
+def _copy_data_files(cci_dir: Path, out_dir: Path):
     """Copy auxiliary data files (recipe_data.yml, CMakeLists.txt, .conf, etc.) that
     recipes reference at runtime, but are not recipe.py or test/patch directories."""
     for item in cci_dir.iterdir():
@@ -614,7 +614,7 @@ def port_recipe(
 # CLI
 # ===========================================================================
 
-def main(argv: list[str] | None = None) -> None:
+def main(argv: list[str] | None = None):
     parser = argparse.ArgumentParser(
         description="Port conan-center-index recipes to ThirdParty format."
     )

@@ -29,7 +29,7 @@ _PLATFORMS = [
 _CLASS_RE = re.compile(r"^class\s+([A-Za-z_][A-Za-z0-9_]*)", re.MULTILINE)
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     p.add_argument(
         "recipe", metavar="<recipe>", nargs="*", help="Recipe name(s) or glob pattern(s) for the recipes check (default: all)")
     p.add_argument(
@@ -111,7 +111,7 @@ def _check_duplicates() -> tuple[bool, dict[str, list[str]]]:
 
 
 @command
-def check(args: argparse.Namespace) -> None:
+def check(args: argparse.Namespace):
     """Validate framework imports, recipe configuration, and duplicate classes."""
     colorama.init()
     cwd = Path.cwd()
@@ -124,13 +124,13 @@ def check(args: argparse.Namespace) -> None:
     run_all = not (args.imports or args.recipes or args.duplicates)
     ok = True
 
-    def header(text: str) -> None:
+    def header(text: str):
         print(f"{Style.BRIGHT}[thirdparty] check: {text}{Style.RESET_ALL}")
 
-    def good(text: str) -> None:
+    def good(text: str):
         print(f"  {Fore.GREEN}OK{Style.RESET_ALL}  {text}")
 
-    def bad(text: str) -> None:
+    def bad(text: str):
         print(f"  {Fore.RED}FAIL{Style.RESET_ALL}  {text}")
 
     if run_all or args.imports:

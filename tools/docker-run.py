@@ -51,7 +51,7 @@ def _image_exists(image: str) -> bool:
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
-def _build_image(image: str) -> None:
+def _build_image(image: str):
     print(f"[docker-run] building image {image} ...", file=sys.stderr)
     subprocess.check_call(
         ["docker", "build", "-t", image, "-f", str(DOCKERFILE), str(REPO)])

@@ -13,7 +13,7 @@ from thirdparty._internal.model.profile import BuildProfile
 from thirdparty.errors import RecipeInvalidConfiguration
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     p.add_argument(
         "recipe", metavar="<recipe>", nargs="*", help="Recipe name(s) or glob pattern(s) to list (default: all)")
     p.add_argument(
@@ -48,7 +48,7 @@ def _is_incompatible(recipes_root: Path, node: Node, profile: BuildProfile) -> b
 
 
 @command(name="list")
-def list_recipes(args: argparse.Namespace) -> None:
+def list_recipes(args: argparse.Namespace):
     """List available recipes with version and build status."""
     colorama.init()
     cwd = Path.cwd()

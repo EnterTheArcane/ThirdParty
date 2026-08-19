@@ -383,7 +383,7 @@ def _status_display(status: str) -> str:
     return _color(label, _GREY)
 
 
-def print_table(results: list[UpdateResult], outdated_only: bool) -> None:
+def print_table(results: list[UpdateResult], outdated_only: bool):
     filtered = [r for r in results if not outdated_only or r.status == "outdated"]
     if not filtered:
         print("All checked recipes are up to date.")
@@ -421,7 +421,7 @@ def print_table(results: list[UpdateResult], outdated_only: bool) -> None:
           f"({len(results) - checked_count} skipped/unknown)")
 
 
-def print_json(results: list[UpdateResult], outdated_only: bool) -> None:
+def print_json(results: list[UpdateResult], outdated_only: bool):
     output = []
     for r in results:
         if outdated_only and r.status != "outdated":
@@ -498,7 +498,7 @@ def main() -> int:
     results: list[UpdateResult] = [None] * len(recipes)  # type: ignore[list-item]
     lock_stderr = concurrent.futures.ThreadPoolExecutor(max_workers=1)
 
-    def _log(msg: str) -> None:
+    def _log(msg: str):
         lock_stderr.submit(print, msg, file=sys.stderr)
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=args.concurrent) as pool:

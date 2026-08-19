@@ -15,7 +15,7 @@ _BUMP_COLOR = {
 }
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     g = p.add_mutually_exclusive_group()
     g.add_argument("--all", action="store_true", dest="all")
     g.add_argument("--missing", action="store_true", dest="missing")
@@ -23,7 +23,7 @@ def setup_parser(p: argparse.ArgumentParser) -> None:
 
 
 @command
-def outdated(args: argparse.Namespace) -> None:
+def outdated(args: argparse.Namespace):
     """Report recipes whose pinned version lags upstream."""
     colorama.init()
     cwd = Path.cwd()
@@ -123,7 +123,7 @@ def _check_recipe(name: str, cls: type) -> tuple[str, str, str, str, str | None]
     return (name, str(cur_v), str(lat_v), "ahead", None)
 
 
-def _print_missing(rows: list[tuple[str, str]]) -> None:
+def _print_missing(rows: list[tuple[str, str]]):
     if not rows:
         print("All recipes have a latest_version() method.")
         return
@@ -135,7 +135,7 @@ def _print_missing(rows: list[tuple[str, str]]) -> None:
         print(f"{name:<{name_w}}  {version:<{ver_w}}")
 
 
-def _print_table(rows: list[tuple[str, str, str, str, str | None]]) -> None:
+def _print_table(rows: list[tuple[str, str, str, str, str | None]]):
     if not rows:
         print("No recipes with latest_version() defined.")
         return

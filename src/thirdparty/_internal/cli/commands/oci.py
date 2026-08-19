@@ -20,7 +20,7 @@ from thirdparty._internal.util.detect import _machine_arch, _machine_os
 from thirdparty.errors import RecipeException
 
 
-def _add_platform_args(p: argparse.ArgumentParser) -> None:
+def _add_platform_args(p: argparse.ArgumentParser):
     p.add_argument(
         "recipe", metavar="<recipe>", nargs="*",
         help="Recipe name(s) or glob pattern(s) (default: all)")
@@ -35,7 +35,7 @@ def _add_platform_args(p: argparse.ArgumentParser) -> None:
         help="Target architecture (X64 or ARM) whose build to act on (default: build machine)")
 
 
-def _add_registry_args(p: argparse.ArgumentParser) -> None:
+def _add_registry_args(p: argparse.ArgumentParser):
     p.add_argument(
         "--registry", default="ghcr.io",
         help="OCI registry host (default: ghcr.io; e.g. docker.io, quay.io, a self-hosted host)")
@@ -57,7 +57,7 @@ def _add_registry_args(p: argparse.ArgumentParser) -> None:
         help="Print the planned registry calls without pushing")
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     subs = p.add_subparsers(dest="oci_command", metavar="<subcommand>")
     subs.required = True
 
@@ -98,7 +98,7 @@ def setup_parser(p: argparse.ArgumentParser) -> None:
 
 
 @command(name="oci")
-def oci(args: argparse.Namespace) -> None:
+def oci(args: argparse.Namespace):
     """Build, push, combine, and pull OCI images (build a layout on disk, push/pull it to/from a registry)."""
     handlers = {"build": _build, "push": _push, "combine": _combine, "pull": _pull}
     handlers[args.oci_command](args)
@@ -119,7 +119,7 @@ def _layout_dir(build_root: Path, name: str, package_id: str, output: "str | Non
     return package_root(build_root, name, package_id) / "dist" / "oci"
 
 
-def _build(args: argparse.Namespace) -> None:
+def _build(args: argparse.Namespace):
     recipes_root, build_root = _project()
     names = resolve_names(recipes_root, args.recipe)
     backend = OciBackend()
@@ -140,7 +140,7 @@ def _build(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def _push(args: argparse.Namespace) -> None:
+def _push(args: argparse.Namespace):
     recipes_root, build_root = _project()
     owner = _require_owner(args)
     names = resolve_names(recipes_root, args.recipe)
@@ -180,7 +180,7 @@ def _push(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def _combine(args: argparse.Namespace) -> None:
+def _combine(args: argparse.Namespace):
     recipes_root, _build_root = _project()
     owner = _require_owner(args)
     names = resolve_names(recipes_root, args.recipe)
@@ -206,7 +206,7 @@ def _combine(args: argparse.Namespace) -> None:
         sys.exit(1)
 
 
-def _pull(args: argparse.Namespace) -> None:
+def _pull(args: argparse.Namespace):
     want_platform = args.platform or f"{oci_os(_machine_os())}/{oci_arch(_machine_arch())}"
     if "/" not in want_platform:
         print(f"[thirdparty] error: --platform must be <os>/<arch> (e.g. linux/amd64), "

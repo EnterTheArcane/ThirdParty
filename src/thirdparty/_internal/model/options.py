@@ -35,7 +35,7 @@ def _is_none_type(annotation: Any) -> bool:
     return annotation is None or annotation is type(None)
 
 
-def _append_unique(values: list[Any], value: Any) -> None:
+def _append_unique(values: list[Any], value: Any):
     if value not in values:
         values.append(value)
 
@@ -131,13 +131,13 @@ class Options:
         return cls(definition, defaults)
 
     @staticmethod
-    def validate_recipe_class(recipe_cls: type[Any]) -> None:
+    def validate_recipe_class(recipe_cls: type[Any]):
         """Eagerly derive (and thereby validate) a recipe's typed options at class definition."""
         typed = _typed_options_class(recipe_cls)
         if typed is not None:
             _derive_options(typed)
 
-    def _check_valid_value(self, name: str, value: Any) -> None:
+    def _check_valid_value(self, name: str, value: Any):
         possible = self._possible.get(name)
         if possible is None:  # unconstrained
             return
@@ -149,13 +149,13 @@ class Options:
             "'%s' is not a valid 'options.%s' value.\nPossible values are %s"
             % (value, name, possible))
 
-    def _ensure_exists(self, name: str) -> None:
+    def _ensure_exists(self, name: str):
         if self._constrained and name not in self._possible:
             raise RecipeException(
                 "option '%s' doesn't exist\nPossible options are %s"
                 % (name, list(self._possible.keys())))
 
-    def _set(self, name: str, value: Any) -> None:
+    def _set(self, name: str, value: Any):
         self._ensure_exists(name)
         self._check_valid_value(name, value)
         self._values[name] = value
@@ -181,11 +181,11 @@ class Options:
         self._ensure_exists(name)
         return self._values.get(name)
 
-    def __setattr__(self, name: str, value: Any) -> None:
+    def __setattr__(self, name: str, value: Any):
         if name[0] == "_":
             return super().__setattr__(name, value)
         self._set(name, value)
 
-    def __delattr__(self, name: str) -> None:
+    def __delattr__(self, name: str):
         self._ensure_exists(name)
         self._values.pop(name, None)

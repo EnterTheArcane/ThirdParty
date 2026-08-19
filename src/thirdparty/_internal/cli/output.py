@@ -12,7 +12,7 @@ def in_github_actions() -> bool:
     return _GITHUB_ACTIONS
 
 
-def _emit(line: str = "") -> None:
+def _emit(line: str = ""):
     # Everything goes to stderr with an explicit flush. Build-tool subprocesses inherit fd 2
     # and write to it directly (in real time), so routing our own status lines to the same
     # stream keeps them correctly interleaved. Plain print() to stdout is block-buffered when
@@ -20,23 +20,23 @@ def _emit(line: str = "") -> None:
     print(line, file=sys.stderr, flush=True)
 
 
-def info(msg: str = "") -> None:
+def info(msg: str = ""):
     _emit(msg)
 
 
-def warn(msg: str) -> None:
+def warn(msg: str):
     _emit(f"[thirdparty] warn: {msg}")
 
 
-def error(msg: str) -> None:
+def error(msg: str):
     _emit(f"[thirdparty] error: {msg}")
 
 
-def group_start(title: str) -> None:
+def group_start(title: str):
     _emit(f"::group::{title}" if _GITHUB_ACTIONS else f"\n[thirdparty] === {title} ===\n")
 
 
-def group_end() -> None:
+def group_end():
     if _GITHUB_ACTIONS:
         _emit("::endgroup::")
 

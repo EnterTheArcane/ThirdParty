@@ -8,7 +8,7 @@ from thirdparty.recipe import RecipeBase
 
 
 class GoogleSourceRepository:
-    def __init__(self, recipe: RecipeBase, url: str) -> None:
+    def __init__(self, recipe: RecipeBase, url: str):
         self._recipe = recipe
         self._url = url.rstrip("/")
 

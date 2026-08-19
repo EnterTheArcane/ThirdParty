@@ -9,7 +9,7 @@ from thirdparty._internal.pack import ARCHIVE_DEFAULT_FORMAT, BACKENDS, gather_m
 from thirdparty.errors import RecipeException
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     p.add_argument(
         "recipe", metavar="<recipe>", nargs="*",
         help="Recipe name(s) or glob pattern(s) to archive (default: all built)")
@@ -31,7 +31,7 @@ def setup_parser(p: argparse.ArgumentParser) -> None:
 
 
 @command
-def archive(args: argparse.Namespace) -> None:
+def archive(args: argparse.Namespace):
     """Package a built recipe into a compressed archive (tar, tar.gz, tar.bz2, tar.xz, or zip)."""
     cwd = Path.cwd()
     recipes_root = cwd / "recipes"

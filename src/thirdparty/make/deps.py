@@ -673,7 +673,7 @@ class MakeDeps:
         """
         self._recipe = recipe
 
-    def generate(self) -> None:
+    def generate(self):
         """
         Collects all dependencies and components, then, generating a Makefile
         """

@@ -23,7 +23,7 @@ _DEFAULT_CHALLENGE = f'Bearer realm="{_BEARER_REALM}",service="example.test"'
 
 class _FakeResponse:
     def __init__(self, status_code: int, *, content: bytes = b"",
-                 json_body: "Any" = None, headers: "dict[str, str] | None" = None) -> None:
+                 json_body: "Any" = None, headers: "dict[str, str] | None" = None):
         self.status_code = status_code
         self.ok = 200 <= status_code < 300
         self.content = content
@@ -38,14 +38,14 @@ class _FakeResponse:
         for i in range(0, len(self.content), chunk_size):
             yield self.content[i:i + chunk_size]
 
-    def close(self) -> None:
+    def close(self):
         pass
 
 
 class _FakeRegistry:
     """A minimal in-memory OCI registry: challenge on /v2/, stores manifests, records calls."""
 
-    def __init__(self, *, challenge: "str | None" = _DEFAULT_CHALLENGE) -> None:
+    def __init__(self, *, challenge: "str | None" = _DEFAULT_CHALLENGE):
         self.calls: list[tuple[str, str]] = []
         self.seen_auth: list[tuple[str, str | None]] = []   # (url, Authorization header)
         self.store: dict[str, bytes] = {}   # ref (tag or digest) -> manifest bytes
@@ -67,7 +67,7 @@ class _FakeRegistry:
             return []
         return sorted((m["platform"]["os"], m["platform"]["architecture"]) for m in idx["manifests"])
 
-    def _record(self, method: str, url: str, kwargs: "dict[str, Any]") -> None:
+    def _record(self, method: str, url: str, kwargs: "dict[str, Any]"):
         self.calls.append((method, url))
         headers: "dict[str, str]" = kwargs.get("headers") or {}
         self.seen_auth.append((url, headers.get("Authorization")))
@@ -338,7 +338,7 @@ class ReferenceParsingTests(unittest.TestCase):
         self.assertEqual(parse_reference("library/img:1"), ("docker.io", "library/img", "1"))
 
 
-def _seed_multiarch(tmp: Path, reg: _FakeRegistry) -> None:
+def _seed_multiarch(tmp: Path, reg: _FakeRegistry):
     """Push windows+linux per-platform images and combine into a multi-arch 1.3.2 tag."""
     with patch.dict("os.environ", {"GH_TOKEN": "t"}, clear=False):
         client = _client(reg)

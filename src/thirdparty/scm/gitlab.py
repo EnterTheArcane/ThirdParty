@@ -54,7 +54,7 @@ class GitlabRepository:
         self,
         recipe: RecipeBase,
         slug: str,
-        host: str = "gitlab.com") -> None:
+        host: str = "gitlab.com"):
         self._recipe = recipe
         self._slug = slug
         self._host = host

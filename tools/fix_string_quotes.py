@@ -92,7 +92,7 @@ def _convert_fstring(node: cst.FormattedString) -> cst.FormattedString | None:
 class _QuoteFixer(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (PositionProvider,)
 
-    def __init__(self, fix: bool) -> None:
+    def __init__(self, fix: bool):
         self.fix = fix
         self.findings: list[tuple[int, str]] = []  # (line, snippet)
 

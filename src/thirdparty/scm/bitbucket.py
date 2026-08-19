@@ -9,7 +9,7 @@ from thirdparty.recipe import RecipeBase
 
 
 class BitbucketRepository:
-    def __init__(self, recipe: RecipeBase, slug: str) -> None:
+    def __init__(self, recipe: RecipeBase, slug: str):
         self._recipe = recipe
         self._slug = slug
 

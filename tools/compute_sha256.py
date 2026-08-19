@@ -120,7 +120,7 @@ def sha256_of_url(url: str) -> str:
     return h.hexdigest()
 
 
-def main() -> None:
+def main():
     results: list[tuple[str, str, str, str, bool]] = []
     errors: list[tuple[str, str]] = []
 

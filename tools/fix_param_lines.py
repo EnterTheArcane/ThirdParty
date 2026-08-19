@@ -142,7 +142,7 @@ def _multiline_params(params: cst.Parameters) -> cst.Parameters:
 class _ParamLineFixer(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (PositionProvider,)
 
-    def __init__(self, fix: bool, min_params: int) -> None:
+    def __init__(self, fix: bool, min_params: int):
         self.fix = fix
         self.min_params = min_params
         self.findings: list[tuple[int, str, int]] = []  # (line, name, count)

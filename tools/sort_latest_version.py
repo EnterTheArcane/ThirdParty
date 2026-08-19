@@ -22,7 +22,7 @@ DEFAULT_ROOTS = (ROOT / "recipes",)
 
 
 class _MoveLatestVersionTransformer(cst.CSTTransformer):
-    def __init__(self, fix: bool) -> None:
+    def __init__(self, fix: bool):
         self.fix = fix
         self.findings: list[tuple[str, str]] = []  # (class_name, file hint)
 

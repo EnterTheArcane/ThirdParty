@@ -63,7 +63,7 @@ def parse_reference(uri: str) -> "tuple[str, str, str]":
     return registry, repository, ref
 
 
-def _noop_log(msg: str) -> None:
+def _noop_log(msg: str):
     pass
 
 
@@ -82,7 +82,7 @@ def _next_link(link_header: "str | None", base: str) -> str:
     return urljoin(base + "/", link_header[start + 1:end])
 
 
-def _raise_for_status(resp: Any, context: str) -> None:
+def _raise_for_status(resp: Any, context: str):
     code = int(resp.status_code)
     if 200 <= code < 300:
         return
@@ -161,7 +161,7 @@ class OciRegistryClient:
         username: "str | None" = None,
         password: "str | None" = None,
         http: "Any | None" = None,
-        log: "Callable[[str], None] | None" = None) -> None:
+        log: "Callable[[str], None] | None" = None):
         self.registry = registry
         # OCI/GHCR repository paths must be lowercase, but a GitHub owner may be mixed-case
         # (e.g. from $GITHUB_REPOSITORY_OWNER); normalize once so the repo path and auth agree.
@@ -177,7 +177,7 @@ class OciRegistryClient:
         self._log: "Callable[[str], None]" = log if log is not None else _noop_log
         self._auth: "dict[str, str]" = {}
 
-    def authenticate(self, actions: str = "pull,push") -> None:
+    def authenticate(self, actions: str = "pull,push"):
         """Discover and satisfy the registry's auth scheme via its ``/v2/`` challenge.
 
         *actions* is the requested token scope (``pull`` for read-only pulls, ``pull,push`` for
@@ -320,7 +320,7 @@ class OciRegistryClient:
         _raise_for_status(resp, f"blob head {digest}")
         return False
 
-    def _push_blob(self, digest: str, data: bytes) -> None:
+    def _push_blob(self, digest: str, data: bytes):
         if self._blob_exists(digest):
             self._log(f"  blob {digest[:19]} already present")
             return
@@ -338,7 +338,7 @@ class OciRegistryClient:
         _raise_for_status(resp, f"blob upload {digest}")
         self._log(f"  pushed blob {digest[:19]} ({len(data)} bytes)")
 
-    def _put_manifest(self, reference: str, data: bytes, media_type: str) -> None:
+    def _put_manifest(self, reference: str, data: bytes, media_type: str):
         headers = {**self._auth, "Content-Type": media_type}
         resp = self._http.put(
             f"{self._base}/v2/{self.repo}/manifests/{reference}", headers=headers, data=data)
@@ -397,7 +397,7 @@ class OciRegistryClient:
         doc = cast("dict[str, Any]", json.loads(content))
         return content, digest, doc
 
-    def _download_blob(self, digest: str, dest_path: Path) -> None:
+    def _download_blob(self, digest: str, dest_path: Path):
         """Stream a blob to *dest_path* (must not pre-exist) and verify its sha256 digest."""
         from thirdparty._internal.util.file_downloader import FileDownloader
         url = f"{self._base}/v2/{self.repo}/blobs/{digest}"
@@ -465,7 +465,7 @@ class OciRegistryClient:
         return result
 
     def _write_pull_metadata(
-        self, dest: Path, doc: "dict[str, Any]", digest: str, want_platform: str) -> None:
+        self, dest: Path, doc: "dict[str, Any]", digest: str, want_platform: str):
         ann = cast("dict[str, Any]", doc.get("annotations") or {})
         meta = {k: v for k, v in ann.items() if k.startswith("thirdparty.")}
         meta["platform"] = want_platform

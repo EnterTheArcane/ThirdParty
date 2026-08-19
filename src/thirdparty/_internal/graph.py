@@ -14,7 +14,7 @@ class Node:
     """A node in the dependency graph: one recipe's identity and its direct dependencies."""
 
     def __init__(
-        self, name: str, version: str, recipe_cls: "type[RecipeBase] | None" = None, host_deps: "list[str] | None" = None, tool_deps: "list[str] | None" = None, *, context: str = CONTEXT_HOST) -> None:
+        self, name: str, version: str, recipe_cls: "type[RecipeBase] | None" = None, host_deps: "list[str] | None" = None, tool_deps: "list[str] | None" = None, *, context: str = CONTEXT_HOST):
         self._name: str = name
         self._version: str = version
         self.recipe_cls: "type[RecipeBase] | None" = recipe_cls
@@ -53,7 +53,7 @@ def read_manifest(build_root: Path, name: str, package_id: str) -> "dict[str, ob
         return None
 
 
-def write_manifest(build_root: Path, name: str, version: str, package_id: str) -> None:
+def write_manifest(build_root: Path, name: str, version: str, package_id: str):
     """Write ``manifest.json`` once when the folder is created; never updated (no completion flag)."""
     import json
     root = package_root(build_root, name, package_id)
@@ -66,7 +66,7 @@ def write_manifest(build_root: Path, name: str, version: str, package_id: str) -
         encoding="utf-8")
 
 
-def invalidate_stale(build_root: Path, name: str, version: str, package_id: str) -> None:
+def invalidate_stale(build_root: Path, name: str, version: str, package_id: str):
     """Wipe the whole ``<package_id>`` folder if its manifest records a different version."""
     import shutil
     manifest = read_manifest(build_root, name, package_id)
@@ -123,7 +123,7 @@ class Graph:
     and any other consumer that needs dependency-aware ordering.
     """
 
-    def __init__(self, nodes: dict[str, Node]) -> None:
+    def __init__(self, nodes: dict[str, Node]):
         self.nodes = nodes
 
     def __contains__(self, name: str) -> bool:

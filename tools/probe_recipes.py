@@ -20,7 +20,7 @@ sys.path.insert(0, str(REPO / "src"))
 from thirdparty._internal.graph.graph import Graph
 
 
-def main() -> None:
+def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--dot", action="store_true", help="Emit Graphviz DOT")
     ap.add_argument("--build-order", action="store_true", help="Print topological build order")

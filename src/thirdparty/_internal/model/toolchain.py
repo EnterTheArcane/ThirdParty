@@ -75,7 +75,7 @@ class ToolchainInfo:
         known = {f.name for f in fields(ToolchainInfo)}
         return ToolchainInfo(**{k: v for k, v in content.items() if k in known})
 
-    def merge(self, other: ToolchainInfo | None) -> None:
+    def merge(self, other: ToolchainInfo | None):
         if other is None:
             return
         for f in fields(self):
@@ -83,7 +83,7 @@ class ToolchainInfo:
             if current in (None, {}, []):
                 setattr(self, f.name, getattr(other, f.name))
 
-    def set_relative_base_folder(self, folder: str) -> None:
+    def set_relative_base_folder(self, folder: str):
         def _abs(value: str) -> str:
             return value if os.path.isabs(value) else os.path.join(folder, value)
 

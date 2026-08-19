@@ -12,7 +12,7 @@ class GnuFtp:
         self,
         recipe: RecipeBase,
         package: str,
-        url: str | None = None) -> None:
+        url: str | None = None):
         self._recipe = recipe
         self._package = package
         self._url = url or f"https://ftp.gnu.org/gnu/{package}/"

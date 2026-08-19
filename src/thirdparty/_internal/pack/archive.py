@@ -47,7 +47,7 @@ class TarBackend:
     preserved), then compresses reproducibly.  ``compression`` is ``""`` (plain tar), ``"gz"``,
     ``"bz2"`` or ``"xz"``."""
 
-    def __init__(self, compression: str) -> None:
+    def __init__(self, compression: str):
         self.compression = compression
         self.name = "tar" if compression == "" else f"tar.{compression}"
 
@@ -91,7 +91,7 @@ def _sorted_files(root: Path) -> "list[tuple[str, str]]":
     Symlinks are followed to their target file contents (ZIP stores no link records)."""
     out: list[tuple[str, str]] = []
 
-    def recurse(directory: str, rel: str) -> None:
+    def recurse(directory: str, rel: str):
         for name in sorted(os.listdir(directory)):
             full = os.path.join(directory, name)
             arcname = f"{rel}/{name}" if rel else name

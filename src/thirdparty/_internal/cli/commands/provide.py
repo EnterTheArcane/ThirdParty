@@ -7,12 +7,12 @@ from thirdparty._internal.graph import package_root
 from thirdparty._internal.loader import try_load_recipe_class, resolve_version, compute_package_id
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     p.add_argument("package", metavar="<package>", help="Package name to provide")
 
 
 @command
-def provide(args: argparse.Namespace) -> None:
+def provide(args: argparse.Namespace):
     name: str = args.package
     cwd = Path.cwd()
     recipes_root = cwd / "recipes"

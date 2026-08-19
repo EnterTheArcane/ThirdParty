@@ -311,7 +311,7 @@ def apply_update(update: RecipeUpdate) -> bool:
     return True
 
 
-def main() -> None:
+def main():
     ok = 0
     fail = 0
     for u in UPDATES:

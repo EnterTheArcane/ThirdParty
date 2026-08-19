@@ -27,7 +27,7 @@ def _discover_commands() -> dict[str, _CommandEntry]:
     return commands
 
 
-def main() -> None:
+def main():
     commands = _discover_commands()
 
     parser = argparse.ArgumentParser(prog="thirdparty")

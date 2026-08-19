@@ -31,28 +31,28 @@ class Folders:
             raise RecipeException("Recipe folder is not set, cannot compute the final folder path")
         return self._recipe
 
-    def set_recipe(self, folder: str | Path) -> None:
+    def set_recipe(self, folder: str | Path):
         self._recipe = Path(folder)
 
     @property
     def source(self) -> Path:
         return _folder_path(self._base_source)
 
-    def set_base_source(self, folder: str | None) -> None:
+    def set_base_source(self, folder: str | None):
         self._base_source = folder
 
     @property
     def build(self) -> Path:
         return _folder_path(self._base_build)
 
-    def set_base_build(self, folder: str | None) -> None:
+    def set_base_build(self, folder: str | None):
         self._base_build = folder
 
     @property
     def base_package(self) -> str | None:
         return self._base_package
 
-    def set_base_package(self, folder: str | None) -> None:
+    def set_base_package(self, folder: str | None):
         self._base_package = folder
 
     @property
@@ -63,5 +63,5 @@ class Folders:
     def generators(self) -> Path:
         return _folder_path(self._base_generators)
 
-    def set_base_generators(self, folder: str | None) -> None:
+    def set_base_generators(self, folder: str | None):
         self._base_generators = folder

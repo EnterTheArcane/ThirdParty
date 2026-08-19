@@ -49,7 +49,7 @@ class Recipe(RecipeBase):
         self.info.set_property("sysroot_path", str(self.folders.package))
 
 
-def _extract_deb_data(deb_path: Path, destination: Path) -> None:
+def _extract_deb_data(deb_path: Path, destination: Path):
     # A .deb is a Unix ar archive; the payload is its data.tar.{xz,zst,gz} member.
     with open(deb_path, "rb") as f:
         if f.read(8) != b"!<arch>\n":
@@ -67,7 +67,7 @@ def _extract_deb_data(deb_path: Path, destination: Path) -> None:
     raise RecipeInvalidConfiguration(f"{deb_path.name} has no data.tar member")
 
 
-def _make_symlinks_relative(root: Path) -> None:
+def _make_symlinks_relative(root: Path):
     # Debian packages link with absolute paths (/lib/x86_64-linux-gnu/libc.so.6), which
     # would escape the sysroot; rewrite them relative so --sysroot resolution works.
     if os.name == "nt":

@@ -100,7 +100,7 @@ def _sort_tuple(node: cst.Tuple) -> cst.Tuple | None:
 class _LicenseTupleFixer(cst.CSTTransformer):
     METADATA_DEPENDENCIES = (PositionProvider,)
 
-    def __init__(self, fix: bool) -> None:
+    def __init__(self, fix: bool):
         self.fix = fix
         self.findings: list[tuple[int, str, str]] = []  # (line, before, after)
 

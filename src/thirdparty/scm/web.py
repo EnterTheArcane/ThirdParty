@@ -10,7 +10,7 @@ from thirdparty.recipe import RecipeBase
 class WebReleaseIndex:
     """Extract the highest stable version from a first-party HTTP index."""
 
-    def __init__(self, recipe: RecipeBase, url: str) -> None:
+    def __init__(self, recipe: RecipeBase, url: str):
         self._recipe = recipe
         self._url = url
 
@@ -49,7 +49,7 @@ class WebReleaseIndex:
 class SourceForgeProject:
     """Read SourceForge's official best-release JSON endpoint."""
 
-    def __init__(self, recipe: RecipeBase, project: str) -> None:
+    def __init__(self, recipe: RecipeBase, project: str):
         self._recipe = recipe
         self._project = project
 
@@ -68,7 +68,7 @@ class SourceForgeProject:
 class NugetPackage:
     """Read stable package versions from NuGet's v3 flat-container API."""
 
-    def __init__(self, recipe: RecipeBase, package: str) -> None:
+    def __init__(self, recipe: RecipeBase, package: str):
         self._recipe = recipe
         self._package = package.lower()
 

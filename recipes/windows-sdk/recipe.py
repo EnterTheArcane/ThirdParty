@@ -30,7 +30,7 @@ class Recipe(RecipeBase):
         package = NugetPackage(self, "microsoft.windows.sdk.cpp")
         return Version(package.latest_release)
 
-    def build(self) -> None:
+    def build(self):
         # Headers/sources, the target-arch libs only, and the tools -- not both arches.
         cpp_arch = f"microsoft.windows.sdk.cpp.{_ARCH[self.settings.arch]}"
         for pkg_id in ("microsoft.windows.sdk.cpp", cpp_arch, "microsoft.windows.sdk.buildtools"):
@@ -42,7 +42,7 @@ class Recipe(RecipeBase):
                 destination=self.folders.build,
                 filename=filename)
 
-    def package(self) -> None:
+    def package(self):
         build = self.folders.build
         pkg = self.folders.package
         arch = _ARCH[self.settings.arch]
@@ -69,7 +69,7 @@ class Recipe(RecipeBase):
             include_dirs=[pkg / "include" / s for s in _INCLUDE_SUBDIRS],
             lib_dirs=[pkg / "lib" / api / arch for api in _LIB_APIS])
 
-    def package_info(self) -> None:
+    def package_info(self):
         self.info.redistributable = False
         root = self.folders.package
         arch = _ARCH[self.settings.arch]

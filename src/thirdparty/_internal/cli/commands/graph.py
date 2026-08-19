@@ -9,7 +9,7 @@ from thirdparty._internal.graph import Graph
 from thirdparty._internal.model.profile import BuildProfile
 
 
-def setup_parser(p: argparse.ArgumentParser) -> None:
+def setup_parser(p: argparse.ArgumentParser):
     p.add_argument(
         "recipe", metavar="<recipe>", nargs="*", help="Root recipe name(s) or glob pattern(s) (default: all)")
     p.add_argument(
@@ -21,7 +21,7 @@ def setup_parser(p: argparse.ArgumentParser) -> None:
 
 
 @command
-def graph(args: argparse.Namespace) -> None:
+def graph(args: argparse.Namespace):
     """Print the dependency graph of recipes (tree, DOT, or mermaid)."""
     cwd = Path.cwd()
     recipes_root = cwd / "recipes"
@@ -68,7 +68,7 @@ def _deps_of(g: Graph, name: str, tools: bool) -> list[tuple[str, bool]]:
     return result
 
 
-def _print_tree(g: Graph, roots: list[str], tools: bool) -> None:
+def _print_tree(g: Graph, roots: list[str], tools: bool):
     enc = (getattr(sys.stdout, "encoding", "") or "").lower()
     if "utf" in enc:
         tee, last_, pipe = "├── ", "└── ", "│   "
@@ -79,7 +79,7 @@ def _print_tree(g: Graph, roots: list[str], tools: bool) -> None:
         node = g.nodes.get(name)
         return f"{name}/{node.version}" if node else name
 
-    def walk(name: str, prefix: str, on_path: set[str]) -> None:
+    def walk(name: str, prefix: str, on_path: set[str]):
         deps = _deps_of(g, name, tools)
         for i, (dep, is_tool) in enumerate(deps):
             last = i == len(deps) - 1
@@ -102,7 +102,7 @@ def _safe_id(name: str) -> str:
     return re.sub(r"[^0-9a-zA-Z_]", "_", name)
 
 
-def _print_dot(g: Graph, tools: bool) -> None:
+def _print_dot(g: Graph, tools: bool):
     print("digraph deps {")
     print("  rankdir=LR;")
     print('  node [shape=box, fontname="monospace"];')
@@ -117,7 +117,7 @@ def _print_dot(g: Graph, tools: bool) -> None:
     print("}")
 
 
-def _print_mermaid(g: Graph, tools: bool) -> None:
+def _print_mermaid(g: Graph, tools: bool):
     print("flowchart LR")
     for name in sorted(g.nodes):
         node = g.nodes[name]

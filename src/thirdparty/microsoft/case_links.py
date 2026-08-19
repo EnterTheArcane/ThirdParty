@@ -38,7 +38,7 @@ def _is_case_sensitive(probe_dir: Path) -> bool:
 class _DirIndex:
     """Per-directory map of lowercased name -> actual name, built lazily."""
 
-    def __init__(self) -> None:
+    def __init__(self):
         self._cache: dict[str, dict[str, str]] = {}
 
     def lookup(self, directory: str, name: str) -> str | None:
@@ -51,7 +51,7 @@ class _DirIndex:
             self._cache[directory] = index
         return index.get(name.lower())
 
-    def add(self, directory: str, name: str) -> None:
+    def add(self, directory: str, name: str):
         if directory in self._cache:
             self._cache[directory].setdefault(name.lower(), name)
 

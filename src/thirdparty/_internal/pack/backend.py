@@ -27,7 +27,7 @@ class PackageBackend(Protocol):
 BACKENDS: "dict[str, PackageBackend]" = {}
 
 
-def register(backend: PackageBackend) -> None:
+def register(backend: PackageBackend):
     BACKENDS[backend.name] = backend
 
 
