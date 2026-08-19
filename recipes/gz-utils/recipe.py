@@ -24,7 +24,6 @@ class Recipe(RecipeBase[_Options]):
         self.requires_tool("cmake")
         self.requires_tool("gz-cmake")
         self.requires("gz-cmake")
-        self.requires("spdlog")
 
     def source(self):
         version_major = Version(self.version).major
@@ -42,11 +41,12 @@ class Recipe(RecipeBase[_Options]):
         tc.variables["SKIP_SWIG"] = True
         # Use bundled CLI11 to avoid external dependency
         tc.variables["GZ_UTILS_VENDOR_CLI11"] = True
+        tc.variables["SKIP_log"] = True
+        tc.variables["CMAKE_DISABLE_FIND_PACKAGE_spdlog"] = True
         tc.generate()
 
         deps = CMakeDeps(self)
         deps.set_property("gz-cmake", "cmake_find_mode", "none")
-        deps.set_property("spdlog", "cmake_file_name", "spdlog")
         deps.generate()
 
     def build(self):
@@ -70,12 +70,7 @@ class Recipe(RecipeBase[_Options]):
         self.info.components["core"].libs = [f"gz-utils{lib_suffix}"]
         self.info.components["core"].builddirs = [""]
         self.info.components["core"].set_property("cmake_target_name", "gz-utils::gz-utils")
-        self.info.components["core"].requires = ["spdlog::spdlog"]
 
         self.info.components["cli"].libs = [f"gz-utils{lib_suffix}-cli"]
         self.info.components["cli"].set_property("cmake_target_name", "gz-utils::gz-utils-cli")
         self.info.components["cli"].requires = ["core"]
-
-        self.info.components["log"].libs = [f"gz-utils{lib_suffix}-log"]
-        self.info.components["log"].set_property("cmake_target_name", "gz-utils::gz-utils-log")
-        self.info.components["log"].requires = ["core", "spdlog::spdlog"]
