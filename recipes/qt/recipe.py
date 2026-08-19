@@ -16,20 +16,6 @@ from thirdparty.pkgconfig import PkgConfigDeps
 from thirdparty.microsoft import msvc_runtime_flag, is_msvc
 from thirdparty.scm import Version, WebReleaseIndex
 
-# X.Org libraries the XCB platform plugin needs. Depend on the individual libx* recipes directly
-# rather than a meta package, so each library's own pkg-config .pc (with correct Libs) is used.
-_X11_RECIPE_REQUIRES = [
-    "libx11", "libxau", "libxcb", "libxdmcp", "libxext", "libxfixes",
-    "libxrandr", "libxrender", "libxv", "libice", "libsm", "libxt",
-]
-_X11_COMPONENT_REQUIRES = [
-    "libx11::x11", "libx11::x11-xcb", "libxau::libxau", "libxcb::xcb",
-    "libxcb::shape", "libxcb::shm", "libxcb::xfixes", "libxdmcp::libxdmcp",
-    "libxext::libxext", "libxfixes::libxfixes", "libxrandr::libxrandr",
-    "libxrender::libxrender", "libxv::libxv", "libice::libice",
-    "libsm::libsm", "libxt::libxt",
-]
-
 SUBMODULES = [
     "qt3d",
     "qt5compat",
@@ -350,8 +336,18 @@ class Recipe(RecipeBase[_Options]):
         if self.options.with_x11 or self.options.qtwayland:
             self.requires("xkbcommon")
         if self.options.with_x11:
-            for _x11_recipe in _X11_RECIPE_REQUIRES:
-                self.requires(_x11_recipe)
+            self.requires("libx11")
+            self.requires("libxau")
+            self.requires("libxcb")
+            self.requires("libxdmcp")
+            self.requires("libxext")
+            self.requires("libxfixes")
+            self.requires("libxrandr")
+            self.requires("libxrender")
+            self.requires("libxv")
+            self.requires("libice")
+            self.requires("libsm")
+            self.requires("libxt")
         if self.options.with_egl:
             self.requires("egl")
         if self.settings.os != "Windows" and self.options.with_opengl != "no":
@@ -1107,7 +1103,22 @@ class Recipe(RecipeBase[_Options]):
                 if self.options.qtwayland or self.options.with_x11:
                     gui_reqs.append("xkbcommon::xkbcommon")
                 if self.options.with_x11:
-                    gui_reqs.extend(_X11_COMPONENT_REQUIRES)
+                    gui_reqs.append("libx11::x11")
+                    gui_reqs.append("libx11::x11-xcb")
+                    gui_reqs.append("libxau::libxau")
+                    gui_reqs.append("libxcb::xcb")
+                    gui_reqs.append("libxcb::shape")
+                    gui_reqs.append("libxcb::shm")
+                    gui_reqs.append("libxcb::xfixes")
+                    gui_reqs.append("libxdmcp::libxdmcp")
+                    gui_reqs.append("libxext::libxext")
+                    gui_reqs.append("libxfixes::libxfixes")
+                    gui_reqs.append("libxrandr::libxrandr")
+                    gui_reqs.append("libxrender::libxrender")
+                    gui_reqs.append("libxv::libxv")
+                    gui_reqs.append("libice::libice")
+                    gui_reqs.append("libsm::libsm")
+                    gui_reqs.append("libxt::libxt")
                 if self.options.with_egl:
                     gui_reqs.append("egl::egl")
             if self.settings.os != "Windows" and self.options.with_opengl != "no":
@@ -1199,7 +1210,17 @@ class Recipe(RecipeBase[_Options]):
             elif self.settings.os == "Emscripten":
                 _create_plugin("QWasmIntegrationPlugin", "qwasm", "platforms", ["Core", "Gui"])
             elif self.options.with_x11:
-                _create_module("XcbQpaPrivate", ["xkbcommon::libxkbcommon-x11", *_X11_COMPONENT_REQUIRES], has_include_dir=False)
+                _create_module(
+                    "XcbQpaPrivate",
+                    [
+                        "xkbcommon::libxkbcommon-x11",
+                        "libx11::x11", "libx11::x11-xcb", "libxau::libxau", "libxcb::xcb",
+                        "libxcb::shape", "libxcb::shm", "libxcb::xfixes", "libxdmcp::libxdmcp",
+                        "libxext::libxext", "libxfixes::libxfixes", "libxrandr::libxrandr",
+                        "libxrender::libxrender", "libxv::libxv", "libice::libice",
+                        "libsm::libsm", "libxt::libxt",
+                    ],
+                    has_include_dir=False)
                 _create_plugin("QXcbIntegrationPlugin", "qxcb", "platforms", ["Core", "Gui", "XcbQpaPrivate"])
 
             _create_plugin("QGifPlugin", "qgif", "imageformats", ["Gui"])
