@@ -11,7 +11,7 @@ class _Options(RecipeOptions):
     shared: bool = False
     pic: bool = True
     sse: bool = True
-    tools: bool = True
+    tools: bool = False
 
 
 class Recipe(RecipeBase[_Options]):
@@ -57,11 +57,11 @@ class Recipe(RecipeBase[_Options]):
 
     def generate(self):
         tc = CMakeToolchain(self)
-        tc.variables["KTX_FEATURE_TOOLS"] = self.options.tools
-        tc.variables["KTX_FEATURE_DOC"] = False
-        tc.variables["KTX_FEATURE_LOADTEST_APPS"] = False
-        tc.variables["KTX_FEATURE_TESTS"] = False
-        tc.variables["BASISU_SUPPORT_SSE"] = self.options.sse
+        tc.cache_variables["KTX_FEATURE_TOOLS"] = self.options.tools
+        tc.cache_variables["KTX_FEATURE_DOC"] = False
+        tc.cache_variables["KTX_FEATURE_LOADTEST_APPS"] = False
+        tc.cache_variables["KTX_FEATURE_TESTS"] = False
+        tc.cache_variables["BASISU_SUPPORT_SSE"] = self.options.sse
         if is_apple_os(self) and self.settings.arch == "X64":
             # astc-encoder's CMakeLists defaults to AVX2 codegen on x86_64 when no other ISA
             # option is set. Apple's clang tags AVX2 object code with the 'x86_64h' (Haswell)
@@ -69,7 +69,7 @@ class Recipe(RecipeBase[_Options]):
             # slices - and the plain x86_64 slice (the one CMAKE_OSX_ARCHITECTURES=x86_64 actually
             # links against) ends up missing the astcenc symbols entirely. SSE4.1 doesn't trigger
             # the subtype split and is guaranteed present on every 64-bit Intel Mac.
-            tc.variables["ASTCENC_ISA_SSE41"] = True
+            tc.cache_variables["ASTCENC_ISA_SSE41"] = True
         tc.generate()
         deps = CMakeDeps(self)
         deps.generate()
