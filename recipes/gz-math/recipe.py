@@ -23,7 +23,6 @@ class Recipe(RecipeBase[_Options]):
     def requirements(self):
         self.requires_tool("cmake")
         self.requires_tool("gz-cmake")
-        self.requires("eigen")
         self.requires("gz-cmake")
         self.requires("gz-utils")
 
@@ -41,13 +40,20 @@ class Recipe(RecipeBase[_Options]):
         tc.variables["BUILD_TESTING"] = False
         tc.variables["SKIP_PYBIND11"] = True
         tc.variables["SKIP_SWIG"] = True
+        # The eigen3 component only provides gz::math <-> Eigen type conversions, which nothing
+        # here consumes (sdformat links gz-math::core). Upstream gates it behind
+        # gz_find_package(EIGEN3 REQUIRED_BY eigen3), so skipping it drops the Eigen3 dependency
+        # without affecting the core library.
+        tc.variables["SKIP_eigen3"] = True
+        # Also stop CMake probing the host for Eigen3 at all - without this the configure still
+        # resolves an ambient system copy (e.g. Homebrew) into EIGEN3_DIR even though the
+        # component is skipped.
+        tc.variables["CMAKE_DISABLE_FIND_PACKAGE_EIGEN3"] = True
         tc.generate()
 
         deps = CMakeDeps(self)
         deps.set_property("gz-cmake", "cmake_find_mode", "none")
         deps.set_property("gz-utils", "cmake_find_mode", "none")
-        deps.set_property("eigen", "cmake_file_name", "Eigen3")
-        deps.set_property("eigen", "cmake_target_name", "Eigen3::Eigen")
         deps.generate()
 
     def build(self):
@@ -72,7 +78,3 @@ class Recipe(RecipeBase[_Options]):
         self.info.components["core"].requires = ["gz-utils::core"]
         if self.settings.os in ("Linux", "FreeBSD"):
             self.info.components["core"].system_libs = ["m"]
-
-        self.info.components["eigen3"].libs = []
-        self.info.components["eigen3"].set_property("cmake_target_name", "gz-math::gz-math-eigen3")
-        self.info.components["eigen3"].requires = ["core", "eigen::eigen3"]

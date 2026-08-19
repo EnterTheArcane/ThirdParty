@@ -26,7 +26,7 @@ class Recipe(RecipeBase[_Options]):
     def source(self):
         get(
             self,
-            url=f"https://www.graphics.rwth-aachen.de/media/openmesh_static/Releases/11.0/OpenMesh-11.0.0.tar.bz2",
+            url="https://www.graphics.rwth-aachen.de/media/openmesh_static/Releases/11.0/OpenMesh-11.0.0.tar.bz2",
             sha256="9d22e65bdd6a125ac2043350a019ec4346ea83922cafdf47e125a03c16f6fa07",
             destination=self.folders.source,
             strip_root=True)
